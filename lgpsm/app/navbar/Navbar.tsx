@@ -50,13 +50,13 @@ export default function Navbar() {
         {/* Action Buttons */}
         <div className="hidden md:flex items-center gap-4">
           <Link
-            href="#signin"
+            href="/pages/signin"
             className="text-sm font-semibold text-gray-700 hover:text-[#FF5B22] px-3 py-2 transition-colors font-[family-name:var(--font-space-grotesk)]"
           >
             Sign In
           </Link>
           <Link
-            href="#signup"
+            href="/pages/signup"
             className="px-5 py-2.5 text-sm font-bold text-white bg-[#FF5B22] hover:bg-[#E04B16] rounded-md shadow-sm transition-all active:scale-95 font-[family-name:var(--font-space-grotesk)]"
           >
             Sign Up Free
@@ -81,8 +81,8 @@ export default function Navbar() {
           <Link href="/pages/pricing" className="block py-2 text-sm font-semibold text-gray-700">Pricing</Link>
           <Link href="/pages/contact" className="block py-2 text-sm font-semibold text-gray-700">Contact</Link>
           <div className="pt-2 flex flex-col gap-2">
-            <Link href="#signin" className="w-full text-center py-2 text-sm font-semibold text-gray-700 border border-gray-200 rounded-lg">Sign In</Link>
-            <Link href="#signup" className="w-full text-center py-2.5 text-sm font-bold text-white bg-[#FF5B22] rounded-lg">Sign Up Free</Link>
+            <Link href="/pages/signin" className="w-full text-center py-2 text-sm font-semibold text-gray-700 border border-gray-200 rounded-lg">Sign In</Link>
+            <Link href="/pages/signup" className="w-full text-center py-2.5 text-sm font-bold text-white bg-[#FF5B22] rounded-lg">Sign Up Free</Link>
           </div>
         </div>
       )}
