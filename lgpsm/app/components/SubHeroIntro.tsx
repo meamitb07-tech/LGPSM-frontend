@@ -164,7 +164,7 @@ export default function SubHeroIntro() {
 
         {/* Dashboard Preview Image */}
         <div ref={dashboardRef} className="pt-2 max-w-[900px] mx-auto">
-          <div className="rounded-2xl overflow-hidden shadow-2xl border border-gray-100 transition-shadow hover:shadow-3xl">
+          <div className="rounded-2xl overflow-hidden shadow-xl border border-gray-100 transition-shadow hover:shadow-xl">
             <Image
               src="/mid_page.png"
               alt="LGPSM Interactive App Dashboard Preview"
