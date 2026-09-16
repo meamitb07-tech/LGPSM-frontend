@@ -7,22 +7,25 @@ import PricingSection from "./components/PricingSection";
 import TestimonialsSection from "./components/TestimonialsSection";
 import FaqSection from "./components/FaqSection";
 import Footer from "./components/Footer";
+import SmoothScroll from "./components/SmoothScroll";
 
 export default function Home() {
   return (
-    <div className="min-h-screen flex flex-col bg-white">
-      <Navbar />
-      <main className="flex-1">
-        <HeroSection />
-        <SubHeroIntro />
-        <ApplicationSection />
-        <FeaturesSection />
-        <PricingSection />
-        <TestimonialsSection />
-        <FaqSection />
-      </main>
-      <Footer />
-    </div>
+    <SmoothScroll>
+      <div className="min-h-screen flex flex-col bg-white">
+        <Navbar />
+        <main className="flex-1">
+          <HeroSection />
+          <SubHeroIntro />
+          <ApplicationSection />
+          <FeaturesSection />
+          <PricingSection />
+          <TestimonialsSection />
+          <FaqSection />
+        </main>
+        <Footer />
+      </div>
+    </SmoothScroll>
   );
 }
 

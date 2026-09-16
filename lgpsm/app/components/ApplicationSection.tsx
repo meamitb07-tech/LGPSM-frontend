@@ -1,7 +1,9 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import Image from "next/image";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 // Deterministic light gray tones for geometric mosaic grid background
 const mosaicTiles = [
@@ -16,8 +18,57 @@ const mosaicTiles = [
 ];
 
 export default function ApplicationSection() {
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const statRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    gsap.registerPlugin(ScrollTrigger);
+
+    const ctx = gsap.context(() => {
+      // 1. Registration Card Smooth Float Entrance
+      if (cardRef.current) {
+        gsap.fromTo(
+          cardRef.current,
+          { opacity: 0, y: 50, scale: 0.96 },
+          {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            duration: 1,
+            ease: "power3.out",
+            scrollTrigger: {
+              trigger: cardRef.current,
+              start: "top 80%",
+            },
+          }
+        );
+      }
+
+      // 2. RSVP Stat Box Scale Entrance
+      if (statRef.current) {
+        gsap.fromTo(
+          statRef.current,
+          { opacity: 0, x: 30 },
+          {
+            opacity: 1,
+            x: 0,
+            duration: 0.8,
+            ease: "power2.out",
+            scrollTrigger: {
+              trigger: statRef.current,
+              start: "top 85%",
+            },
+          }
+        );
+      }
+    }, sectionRef);
+
+    return () => ctx.revert();
+  }, []);
+
   return (
-    <section className="w-full relative overflow-hidden bg-white py-12 lg:py-16">
+    <section ref={sectionRef} className="w-full relative overflow-hidden bg-white py-12 lg:py-16">
       {/* Container wrapping full section */}
       <div className="relative w-full min-h-[700px] lg:min-h-[780px] flex flex-col justify-between">
         
@@ -54,7 +105,7 @@ export default function ApplicationSection() {
 
           {/* Top Row: Upper right RSVP stats box sitting inside the dark panel area */}
           <div className="w-full flex justify-end mb-8">
-            <div className="w-full max-w-xs lg:max-w-sm bg-[#1E252B]/90 backdrop-blur-md border border-gray-700/60 p-6 sm:p-7 shadow-xl">
+            <div ref={statRef} className="w-full max-w-xs lg:max-w-sm bg-[#1E252B]/90 backdrop-blur-md border border-gray-700/60 p-6 sm:p-7 shadow-xl">
               <p className="text-gray-400 text-xs font-medium tracking-wide mb-2 font-[family-name:var(--font-space-grotesk)]">
                 RSVP Responses Collected
               </p>
@@ -78,13 +129,13 @@ export default function ApplicationSection() {
           </div>
 
           {/* Main Registration Video & Form Card (Spans across both backgrounds) */}
-          <div className="w-full max-w-[960px] mx-auto">
+          <div ref={cardRef} className="w-full max-w-[960px] mx-auto">
             <div className="rounded-[28px] p-4 sm:p-6 lg:p-7 bg-gradient-to-r from-[#FF7338] via-[#FF5B22] to-[#FF8546] shadow-2xl border border-orange-400/30">
               
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
                 
                 {/* Left Side: Laptop Typing Image with Play Overlay */}
-                <div className="lg:col-span-5 relative rounded-2xl overflow-hidden min-h-[260px] sm:min-h-[300px] flex items-center justify-center bg-gray-900 group shadow-md">
+                <div className="lg:col-span-5 relative rounded-2xl overflow-hidden min-h-[260px] sm:min-h-[300px] flex items-center justify-center bg-gray-900 group shadow-md cursor-pointer">
                   {/* Laptop user typing image */}
                   <img
                     src="https://images.unsplash.com/photo-1573164713988-8665fc963095?auto=format&fit=crop&w=800&q=80"
@@ -94,7 +145,7 @@ export default function ApplicationSection() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/20" />
 
                   {/* Play Button Overlay */}
-                  <div className="absolute z-10 w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-white/90 backdrop-blur-sm shadow-2xl flex items-center justify-center text-gray-800 transition-transform duration-300 group-hover:scale-110 cursor-pointer">
+                  <div className="absolute z-10 w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-white/90 backdrop-blur-sm shadow-2xl flex items-center justify-center text-gray-800 transition-transform duration-300 group-hover:scale-110">
                     <svg className="w-7 h-7 text-gray-800 ml-1" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M8 5v14l11-7z" />
                     </svg>
@@ -237,4 +288,3 @@ export default function ApplicationSection() {
     </section>
   );
 }
-

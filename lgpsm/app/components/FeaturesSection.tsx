@@ -1,6 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 interface Feature {
   title: string;
@@ -108,8 +110,74 @@ const features: Feature[] = [
 ];
 
 export default function FeaturesSection() {
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const descRef = useRef<HTMLParagraphElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    gsap.registerPlugin(ScrollTrigger);
+
+    const ctx = gsap.context(() => {
+      if (titleRef.current) {
+        gsap.fromTo(
+          titleRef.current,
+          { opacity: 0, y: 35 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.9,
+            ease: "power3.out",
+            scrollTrigger: {
+              trigger: titleRef.current,
+              start: "top 85%",
+            },
+          }
+        );
+      }
+
+      if (descRef.current) {
+        gsap.fromTo(
+          descRef.current,
+          { opacity: 0, y: 25 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.8,
+            delay: 0.15,
+            ease: "power3.out",
+            scrollTrigger: {
+              trigger: descRef.current,
+              start: "top 88%",
+            },
+          }
+        );
+      }
+
+      if (gridRef.current) {
+        gsap.fromTo(
+          gridRef.current.children,
+          { opacity: 0, y: 35 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.8,
+            stagger: 0.12,
+            ease: "power2.out",
+            scrollTrigger: {
+              trigger: gridRef.current,
+              start: "top 80%",
+            },
+          }
+        );
+      }
+    }, sectionRef);
+
+    return () => ctx.revert();
+  }, []);
+
   return (
-    <section id="features" className="py-20 lg:py-28 bg-white">
+    <section ref={sectionRef} id="features" className="py-20 lg:py-28 bg-white">
       <div className="max-w-[1140px] mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* Section Header */}
@@ -126,32 +194,32 @@ export default function FeaturesSection() {
           </div>
 
           {/* Title */}
-          <h2 className="text-3xl sm:text-4xl lg:text-[46px] font-medium tracking-tight leading-[1.15] font-[family-name:var(--font-space-grotesk)]">
+          <h2 ref={titleRef} className="text-3xl sm:text-4xl lg:text-[46px] font-medium tracking-tight leading-[1.15] font-[family-name:var(--font-space-grotesk)]">
             <span className="text-[#0D0D0D]">Everything You Need to</span>
             <br />
             <span className="text-gray-400 font-normal">Manage Invitations</span>
           </h2>
 
           {/* Description */}
-          <p className="max-w-2xl mx-auto text-sm sm:text-base text-gray-500 font-normal leading-relaxed font-[family-name:var(--font-space-grotesk)]">
+          <p ref={descRef} className="max-w-2xl mx-auto text-sm sm:text-base text-gray-500 font-normal leading-relaxed font-[family-name:var(--font-space-grotesk)]">
             LGPSM provides all the essential tools you need to create, send, and manage digital invitations effortlessly. From designing beautiful invitations and generating QR codes to organizing guest lists and tracking RSVPs, everything is available in one simple dashboard.
           </p>
         </div>
 
         {/* 3×2 Features Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-16 gap-x-12">
+        <div ref={gridRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-16 gap-x-12">
           {features.map((feature, index) => (
             <div
               key={index}
-              className="text-center flex flex-col items-center gap-4 group"
+              className="text-center flex flex-col items-center gap-4 group cursor-pointer"
             >
               {/* Icon */}
-              <div className="flex items-center justify-center mb-1 transition-transform group-hover:scale-105 duration-200">
+              <div className="flex items-center justify-center mb-1 transition-transform group-hover:scale-110 group-hover:-translate-y-1 duration-300">
                 {feature.icon}
               </div>
 
               {/* Title */}
-              <h3 className="text-lg font-bold text-[#0D0D0D] tracking-tight font-[family-name:var(--font-space-grotesk)]">
+              <h3 className="text-lg font-bold text-[#0D0D0D] tracking-tight font-[family-name:var(--font-space-grotesk)] group-hover:text-[#FF5B22] transition-colors">
                 {feature.title}
               </h3>
 
@@ -167,4 +235,5 @@ export default function FeaturesSection() {
     </section>
   );
 }
+
 

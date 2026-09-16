@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 interface Testimonial {
   quote: string;
@@ -43,11 +45,77 @@ const testimonials: Testimonial[] = [
 
 export default function TestimonialsSection() {
   const [activeIdx, setActiveIdx] = useState(0);
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const quoteRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    gsap.registerPlugin(ScrollTrigger);
+
+    const ctx = gsap.context(() => {
+      if (titleRef.current) {
+        gsap.fromTo(
+          titleRef.current,
+          { opacity: 0, y: 35 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.9,
+            ease: "power3.out",
+            scrollTrigger: {
+              trigger: titleRef.current,
+              start: "top 85%",
+            },
+          }
+        );
+      }
+
+      if (sectionRef.current) {
+        gsap.fromTo(
+          sectionRef.current,
+          { opacity: 0, y: 35 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.9,
+            ease: "power2.out",
+            scrollTrigger: {
+              trigger: sectionRef.current,
+              start: "top 80%",
+            },
+          }
+        );
+      }
+    }, sectionRef);
+
+    return () => ctx.revert();
+  }, []);
+
+  const handleSlideChange = (newIdx: number) => {
+    if (newIdx === activeIdx) return;
+    if (quoteRef.current) {
+      gsap.to(quoteRef.current, {
+        opacity: 0,
+        y: -10,
+        duration: 0.25,
+        onComplete: () => {
+          setActiveIdx(newIdx);
+          gsap.fromTo(
+            quoteRef.current,
+            { opacity: 0, y: 15 },
+            { opacity: 1, y: 0, duration: 0.4, ease: "power2.out" }
+          );
+        },
+      });
+    } else {
+      setActiveIdx(newIdx);
+    }
+  };
 
   const current = testimonials[activeIdx];
 
   return (
-    <section className="py-20 lg:py-28 bg-white">
+    <section ref={sectionRef} className="py-20 lg:py-28 bg-white">
       <div className="max-w-[1140px] mx-auto px-4 sm:px-6 lg:px-8 text-center">
         
         {/* Section Header */}
@@ -64,15 +132,15 @@ export default function TestimonialsSection() {
           </div>
 
           {/* Title */}
-          <h2 className="text-3xl sm:text-4xl lg:text-[46px] font-medium tracking-tight leading-[1.15] font-[family-name:var(--font-space-grotesk)]">
+          <h2 ref={titleRef} className="text-3xl sm:text-4xl lg:text-[46px] font-medium tracking-tight leading-[1.15] font-[family-name:var(--font-space-grotesk)]">
             <span className="text-[#0D0D0D]">Here's what our customers</span>
             <br />
             <span className="text-gray-400 font-normal">have to say about us</span>
           </h2>
         </div>
 
-        {/* Testimonial Quote */}
-        <div className="max-w-3xl mx-auto min-h-[140px] flex flex-col justify-center transition-all duration-300">
+        {/* Testimonial Quote Container */}
+        <div ref={quoteRef} className="max-w-3xl mx-auto min-h-[140px] flex flex-col justify-center">
           <p className="text-base sm:text-lg lg:text-xl font-medium text-gray-800 leading-relaxed font-[family-name:var(--font-space-grotesk)]">
             "{current.quote}"
           </p>
@@ -91,12 +159,12 @@ export default function TestimonialsSection() {
           {testimonials.map((_, idx) => (
             <button
               key={idx}
-              onClick={() => setActiveIdx(idx)}
+              onClick={() => handleSlideChange(idx)}
               aria-label={`Go to slide ${idx + 1}`}
-              className={`transition-all duration-300 rounded-full ${
+              className={`transition-all duration-300 rounded-full cursor-pointer ${
                 activeIdx === idx
-                  ? "w-2.5 h-2.5 bg-[#FF5B22] scale-110"
-                  : "w-1.5 h-1.5 bg-gray-300 hover:bg-gray-400"
+                  ? "w-3 h-3 bg-[#FF5B22] scale-110"
+                  : "w-2 h-2 bg-gray-300 hover:bg-gray-400"
               }`}
             />
           ))}
@@ -106,3 +174,4 @@ export default function TestimonialsSection() {
     </section>
   );
 }
+

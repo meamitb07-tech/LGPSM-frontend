@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 interface FaqItem {
   question: string;
@@ -37,13 +39,78 @@ const faqs: FaqItem[] = [
 
 export default function FaqSection() {
   const [openIdx, setOpenIdx] = useState<number | null>(0);
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const faqListRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    gsap.registerPlugin(ScrollTrigger);
+
+    const ctx = gsap.context(() => {
+      if (titleRef.current) {
+        gsap.fromTo(
+          titleRef.current,
+          { opacity: 0, y: 35 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.9,
+            ease: "power3.out",
+            scrollTrigger: {
+              trigger: titleRef.current,
+              start: "top 85%",
+            },
+          }
+        );
+      }
+
+      if (faqListRef.current) {
+        gsap.fromTo(
+          faqListRef.current.children,
+          { opacity: 0, y: 20 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.6,
+            stagger: 0.1,
+            ease: "power2.out",
+            scrollTrigger: {
+              trigger: faqListRef.current,
+              start: "top 80%",
+            },
+          }
+        );
+      }
+
+      if (cardRef.current) {
+        gsap.fromTo(
+          cardRef.current,
+          { opacity: 0, scale: 0.95, y: 30 },
+          {
+            opacity: 1,
+            scale: 1,
+            y: 0,
+            duration: 0.8,
+            ease: "power2.out",
+            scrollTrigger: {
+              trigger: cardRef.current,
+              start: "top 85%",
+            },
+          }
+        );
+      }
+    }, sectionRef);
+
+    return () => ctx.revert();
+  }, []);
 
   const toggleFaq = (index: number) => {
     setOpenIdx(openIdx === index ? null : index);
   };
 
   return (
-    <section className="py-16 lg:py-24 bg-white border-t border-gray-100">
+    <section ref={sectionRef} className="py-16 lg:py-24 bg-white border-t border-gray-100">
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
         
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-16 items-start">
@@ -62,12 +129,12 @@ export default function FaqSection() {
             </div>
 
             {/* Main Title */}
-            <h2 className="text-3xl sm:text-4xl lg:text-[44px] font-medium text-[#0D0D0D] tracking-tight mb-8 font-[family-name:var(--font-space-grotesk)]">
+            <h2 ref={titleRef} className="text-3xl sm:text-4xl lg:text-[44px] font-medium text-[#0D0D0D] tracking-tight mb-8 font-[family-name:var(--font-space-grotesk)]">
               Have Questions?
             </h2>
 
             {/* FAQ Accordion List */}
-            <div className="divide-y divide-gray-100 border-t border-gray-100">
+            <div ref={faqListRef} className="divide-y divide-gray-100 border-t border-gray-100">
               {faqs.map((faq, idx) => {
                 const isOpen = openIdx === idx;
                 return (
@@ -79,13 +146,13 @@ export default function FaqSection() {
                       <span className="text-base sm:text-lg font-bold text-[#0D0D0D] tracking-tight font-[family-name:var(--font-space-grotesk)] group-hover:text-[#FF5B22] transition-colors">
                         {faq.question}
                       </span>
-                      <span className="text-xl font-normal text-gray-400 ml-4 shrink-0 font-mono">
+                      <span className="text-xl font-normal text-gray-400 ml-4 shrink-0 font-mono transition-transform duration-200">
                         {isOpen ? "×" : "+"}
                       </span>
                     </button>
 
                     {isOpen && (
-                      <p className="mt-3 text-sm text-gray-500 leading-relaxed max-w-xl font-[family-name:var(--font-space-grotesk)]">
+                      <p className="mt-3 text-sm text-gray-500 leading-relaxed max-w-xl font-[family-name:var(--font-space-grotesk)] animate-fadeIn">
                         {faq.answer}
                       </p>
                     )}
@@ -97,7 +164,7 @@ export default function FaqSection() {
 
           {/* Right Column: Contact Us Card */}
           <div className="lg:col-span-5 flex justify-center lg:justify-end lg:pt-10">
-            <div className="bg-[#F7F8FA] rounded-xl p-7 sm:p-8 border border-gray-100/80 shadow-sm w-full max-w-sm text-left">
+            <div ref={cardRef} className="bg-[#F7F8FA] rounded-xl p-7 sm:p-8 border border-gray-100/80 shadow-sm w-full max-w-sm text-left">
               {/* Icon */}
               <div className="mb-5">
                 <svg className="w-9 h-9 text-[#FF5B22]" viewBox="0 0 32 32" fill="none">
@@ -121,7 +188,7 @@ export default function FaqSection() {
               {/* Contact Button */}
               <a
                 href="#contact"
-                className="inline-block py-2.5 px-6 bg-[#FF5B22] hover:bg-[#E04B16] text-white font-bold text-xs rounded-md transition-colors shadow-sm font-[family-name:var(--font-space-grotesk)]"
+                className="inline-block py-2.5 px-6 bg-[#FF5B22] hover:bg-[#E04B16] text-white font-bold text-xs rounded-md transition-all hover:scale-105 shadow-sm font-[family-name:var(--font-space-grotesk)]"
               >
                 Contact Us
               </a>
@@ -134,4 +201,5 @@ export default function FaqSection() {
     </section>
   );
 }
+
 

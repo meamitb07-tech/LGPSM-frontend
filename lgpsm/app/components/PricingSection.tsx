@@ -1,16 +1,65 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 export default function PricingSection() {
   const [contactSubmitted, setContactSubmitted] = useState(false);
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    gsap.registerPlugin(ScrollTrigger);
+
+    const ctx = gsap.context(() => {
+      if (titleRef.current) {
+        gsap.fromTo(
+          titleRef.current,
+          { opacity: 0, y: 35 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.9,
+            ease: "power3.out",
+            scrollTrigger: {
+              trigger: titleRef.current,
+              start: "top 85%",
+            },
+          }
+        );
+      }
+
+      if (containerRef.current) {
+        gsap.fromTo(
+          containerRef.current,
+          { opacity: 0, y: 40, scale: 0.96 },
+          {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            duration: 1,
+            ease: "power3.out",
+            scrollTrigger: {
+              trigger: containerRef.current,
+              start: "top 80%",
+            },
+          }
+        );
+      }
+    }, sectionRef);
+
+    return () => ctx.revert();
+  }, []);
 
   return (
-    <section id="pricing" className="py-16 lg:py-24 bg-white">
+    <section ref={sectionRef} id="pricing" className="py-16 lg:py-24 bg-white">
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Rounded Card Container with last_page.png as CSS Background */}
         <div
+          ref={containerRef}
           className="relative rounded-[32px] overflow-hidden shadow-2xl p-8 sm:p-12 lg:p-16 text-center text-white"
           style={{
             backgroundImage: "url('/last_page.png')",
@@ -35,7 +84,7 @@ export default function PricingSection() {
                 <span>PRICING</span>
               </div>
 
-              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-white tracking-tight font-[family-name:var(--font-space-grotesk)]">
+              <h2 ref={titleRef} className="text-3xl sm:text-4xl lg:text-5xl font-medium text-white tracking-tight font-[family-name:var(--font-space-grotesk)]">
                 Our Pricing
               </h2>
             </div>
@@ -160,4 +209,5 @@ export default function PricingSection() {
     </section>
   );
 }
+
 

@@ -1,11 +1,43 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import Image from "next/image";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 export default function Footer() {
+  const footerRef = useRef<HTMLDivElement>(null);
+  const ctaRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    gsap.registerPlugin(ScrollTrigger);
+
+    const ctx = gsap.context(() => {
+      if (ctaRef.current) {
+        gsap.fromTo(
+          ctaRef.current.children,
+          { opacity: 0, y: 30 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.8,
+            stagger: 0.15,
+            ease: "power2.out",
+            scrollTrigger: {
+              trigger: ctaRef.current,
+              start: "top 85%",
+            },
+          }
+        );
+      }
+    }, footerRef);
+
+    return () => ctx.revert();
+  }, []);
+
   return (
     <footer
+      ref={footerRef}
       className="relative text-gray-300 py-16 lg:py-24 overflow-hidden"
       style={{
         backgroundImage: "url('/Footer.png')",
@@ -16,7 +48,7 @@ export default function Footer() {
       <div className="relative z-10 max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Top CTA Banner */}
-        <div className="text-center max-w-xl mx-auto pb-16 lg:pb-24">
+        <div ref={ctaRef} className="text-center max-w-xl mx-auto pb-16 lg:pb-24">
           <h2 className="text-3xl sm:text-4xl lg:text-[44px] font-medium text-white tracking-tight leading-tight font-[family-name:var(--font-space-grotesk)]">
             Get started today
           </h2>
@@ -37,7 +69,7 @@ export default function Footer() {
             />
             <button
               type="submit"
-              className="w-full sm:w-auto px-6 py-2.5 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-xs sm:text-sm font-bold rounded-md transition-colors shadow-md shrink-0 font-[family-name:var(--font-space-grotesk)] cursor-pointer"
+              className="w-full sm:w-auto px-6 py-2.5 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-xs sm:text-sm font-bold rounded-md transition-all hover:scale-105 active:scale-95 shadow-md shrink-0 font-[family-name:var(--font-space-grotesk)] cursor-pointer"
             >
               Sign Up Free
             </button>
@@ -85,4 +117,5 @@ export default function Footer() {
     </footer>
   );
 }
+
 

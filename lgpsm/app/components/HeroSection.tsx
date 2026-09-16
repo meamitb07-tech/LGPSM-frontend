@@ -1,9 +1,34 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import gsap from "gsap";
 
 export default function HeroSection() {
   const [email, setEmail] = useState("");
+  const heroRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const ctx = gsap.context(() => {
+      if (heroRef.current) {
+        gsap.fromTo(
+          heroRef.current,
+          { opacity: 0, scale: 0.97 },
+          { opacity: 1, scale: 1, duration: 1, ease: "power3.out" }
+        );
+      }
+
+      if (contentRef.current) {
+        gsap.fromTo(
+          contentRef.current.children,
+          { opacity: 0, y: 30 },
+          { opacity: 1, y: 0, duration: 0.8, stagger: 0.15, ease: "power2.out", delay: 0.2 }
+        );
+      }
+    }, heroRef);
+
+    return () => ctx.revert();
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,12 +42,13 @@ export default function HeroSection() {
         
         {/* Responsive Grid Hero Container */}
         <div 
+          ref={heroRef}
           className="relative w-full rounded-[15px] overflow-hidden shadow-xl bg-cover bg-center grid grid-cols-1 lg:grid-cols-12 min-h-[620px] items-center"
           style={{ backgroundImage: "url('/top_hero.png')" }}
         >
           
           {/* Left Side: Clean HTML Text, Subtitle & Interactive Form Overlay */}
-          <div className="lg:col-span-6 z-10 p-8 sm:p-12 lg:p-16 space-y-6 sm:space-y-8 bg-transparent">
+          <div ref={contentRef} className="lg:col-span-6 z-10 p-8 sm:p-12 lg:p-16 space-y-6 sm:space-y-8 bg-transparent">
             
             {/* Main Headline */}
             <h1 className="text-3xl sm:text-4xl lg:text-[50px] font-medium text-[#0D0D0D] tracking-tight leading-[1.12] font-[family-name:var(--font-space-grotesk)]">
@@ -34,7 +60,7 @@ export default function HeroSection() {
               Design, customize, and share stunning QR-based invitations for events and celebrations all in one simple platform.
             </p>
 
-            {/* Email Label + Form Bar & Button (rounded-md) */}
+            {/* Email Label + Form Bar & Button */}
             <form onSubmit={handleSubmit} className="space-y-2 pt-2 max-w-md">
               <label className="block text-xs font-semibold text-[#1A1A1A] font-[family-name:var(--font-space-grotesk)]">
                 Email Address
@@ -50,7 +76,7 @@ export default function HeroSection() {
                 />
                 <button
                   type="submit"
-                  className="px-6 py-3 bg-[#FF5B22] hover:bg-[#E04B16] text-white font-bold text-sm rounded-md shadow-md transition-all active:scale-95 whitespace-nowrap font-[family-name:var(--font-space-grotesk)] cursor-pointer"
+                  className="px-6 py-3 bg-[#FF5B22] hover:bg-[#E04B16] text-white font-bold text-sm rounded-md shadow-md transition-all hover:scale-105 active:scale-95 whitespace-nowrap font-[family-name:var(--font-space-grotesk)] cursor-pointer"
                 >
                   Sign Up Free
                 </button>
@@ -59,7 +85,7 @@ export default function HeroSection() {
 
           </div>
 
-          {/* Right Side: Empty for background image to show */}
+          {/* Right Side: Background space */}
           <div className="hidden lg:block lg:col-span-6"></div>
 
         </div>
@@ -68,3 +94,4 @@ export default function HeroSection() {
     </section>
   );
 }
+
