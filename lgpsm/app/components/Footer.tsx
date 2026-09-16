@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
@@ -96,15 +97,15 @@ export default function Footer() {
 
           {/* Navigation Links */}
           <div className="flex items-center justify-center gap-6 mt-6 text-xs font-semibold text-gray-400 font-[family-name:var(--font-space-grotesk)]">
-            <a href="#features" className="hover:text-white transition-colors">
+            <Link href="/pages/features" className="hover:text-white transition-colors">
               Features
-            </a>
-            <a href="#pricing" className="hover:text-white transition-colors">
+            </Link>
+            <Link href="/pages/pricing" className="hover:text-white transition-colors">
               Pricing
-            </a>
-            <a href="#contact" className="hover:text-white transition-colors">
+            </Link>
+            <Link href="/pages/contact" className="hover:text-white transition-colors">
               Contact
-            </a>
+            </Link>
           </div>
 
           {/* Copyright Line */}

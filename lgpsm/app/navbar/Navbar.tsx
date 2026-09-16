@@ -27,19 +27,19 @@ export default function Navbar() {
           {/* Nav links */}
           <nav className="hidden md:flex items-center gap-7">
             <Link
-              href="#features"
+              href="/pages/features"
               className="text-sm font-semibold text-gray-700 hover:text-[#FF5B22] transition-colors font-[family-name:var(--font-space-grotesk)]"
             >
               Features
             </Link>
             <Link
-              href="#pricing"
+              href="/pages/pricing"
               className="text-sm font-semibold text-gray-700 hover:text-[#FF5B22] transition-colors font-[family-name:var(--font-space-grotesk)]"
             >
               Pricing
             </Link>
             <Link
-              href="#contact"
+              href="/pages/contact"
               className="text-sm font-semibold text-gray-700 hover:text-[#FF5B22] transition-colors font-[family-name:var(--font-space-grotesk)]"
             >
               Contact
@@ -77,9 +77,9 @@ export default function Navbar() {
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
         <div className="md:hidden bg-white border-b border-gray-200 px-4 pt-3 pb-6 space-y-3 font-[family-name:var(--font-space-grotesk)]">
-          <Link href="#features" className="block py-2 text-sm font-semibold text-gray-700">Features</Link>
-          <Link href="#pricing" className="block py-2 text-sm font-semibold text-gray-700">Pricing</Link>
-          <Link href="#contact" className="block py-2 text-sm font-semibold text-gray-700">Contact</Link>
+          <Link href="/pages/features" className="block py-2 text-sm font-semibold text-gray-700">Features</Link>
+          <Link href="/pages/pricing" className="block py-2 text-sm font-semibold text-gray-700">Pricing</Link>
+          <Link href="/pages/contact" className="block py-2 text-sm font-semibold text-gray-700">Contact</Link>
           <div className="pt-2 flex flex-col gap-2">
             <Link href="#signin" className="w-full text-center py-2 text-sm font-semibold text-gray-700 border border-gray-200 rounded-lg">Sign In</Link>
             <Link href="#signup" className="w-full text-center py-2.5 text-sm font-bold text-white bg-[#FF5B22] rounded-lg">Sign Up Free</Link>

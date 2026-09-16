@@ -5,15 +5,23 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 export default function PricingSection() {
-  const [contactSubmitted, setContactSubmitted] = useState(false);
+  const [billingCycle, setBillingCycle] = useState<"yearly" | "monthly">("yearly");
   const sectionRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const subtitleRef = useRef<HTMLParagraphElement>(null);
+  const badgesRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLDivElement>(null);
+  const cardsRef = useRef<HTMLDivElement>(null);
+
+  const arrowPathRef = useRef<SVGPathElement>(null);
+  const arrowHeadRef = useRef<SVGPathElement>(null);
+  const handwrittenTextRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
 
     const ctx = gsap.context(() => {
+      // Header text reveal
       if (titleRef.current) {
         gsap.fromTo(
           titleRef.current,
@@ -31,18 +39,132 @@ export default function PricingSection() {
         );
       }
 
-      if (containerRef.current) {
+      if (subtitleRef.current) {
         gsap.fromTo(
-          containerRef.current,
-          { opacity: 0, y: 40, scale: 0.96 },
+          subtitleRef.current,
+          { opacity: 0, y: 25 },
           {
             opacity: 1,
             y: 0,
-            scale: 1,
-            duration: 1,
+            duration: 0.8,
+            delay: 0.15,
             ease: "power3.out",
             scrollTrigger: {
-              trigger: containerRef.current,
+              trigger: subtitleRef.current,
+              start: "top 88%",
+            },
+          }
+        );
+      }
+
+      // Feature badges stagger
+      if (badgesRef.current) {
+        gsap.fromTo(
+          badgesRef.current.children,
+          { opacity: 0, y: 20 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.7,
+            stagger: 0.12,
+            ease: "power2.out",
+            scrollTrigger: {
+              trigger: badgesRef.current,
+              start: "top 90%",
+            },
+          }
+        );
+      }
+
+      // Handwritten Callout & SVG Arrow Animation
+      if (arrowPathRef.current && arrowHeadRef.current && handwrittenTextRef.current) {
+        const pathLen = arrowPathRef.current.getTotalLength();
+        const headLen = arrowHeadRef.current.getTotalLength();
+
+        gsap.set(arrowPathRef.current, {
+          strokeDasharray: pathLen,
+          strokeDashoffset: pathLen,
+        });
+        gsap.set(arrowHeadRef.current, {
+          strokeDasharray: headLen,
+          strokeDashoffset: headLen,
+        });
+
+        const arrowTl = gsap.timeline({
+          scrollTrigger: {
+            trigger: toggleRef.current,
+            start: "top 85%",
+          },
+        });
+
+        // 1. Text reveals smoothly as if handwritten from left to right
+        arrowTl
+          .fromTo(
+            handwrittenTextRef.current,
+            {
+              clipPath: "polygon(0 -20%, 0 -20%, 0 120%, 0 120%)",
+              opacity: 0,
+              scale: 0.88,
+              rotate: -16,
+            },
+            {
+              clipPath: "polygon(-10% -20%, 125% -20%, 125% 120%, -10% 120%)",
+              opacity: 1,
+              scale: 1,
+              rotate: -12,
+              duration: 2.0,
+              ease: "sine.inOut",
+              onComplete: () => {
+                if (handwrittenTextRef.current) {
+                  handwrittenTextRef.current.style.clipPath = "none";
+                }
+              },
+            }
+          )
+          // 2. SVG arrow curve draws smoothly
+          .to(
+            arrowPathRef.current,
+            {
+              strokeDashoffset: 0,
+              duration: 1.8,
+              ease: "power2.inOut",
+            },
+            "-=1.2"
+          )
+          // 3. Arrowhead tip draws into place
+          .to(
+            arrowHeadRef.current,
+            {
+              strokeDashoffset: 0,
+              duration: 0.6,
+              ease: "power2.out",
+            },
+            "-=0.2"
+          )
+          // 4. Subtle continuous floating motion
+          .to(handwrittenTextRef.current, {
+            y: -3,
+            rotate: -10,
+            duration: 2.2,
+            repeat: -1,
+            yoyo: true,
+            ease: "sine.inOut",
+          });
+      }
+
+      // Toggle & Cards entrance
+      if (cardsRef.current) {
+        gsap.fromTo(
+          cardsRef.current.children,
+          { opacity: 0, y: 45 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.9,
+            stagger: 0.15,
+            ease: "power3.out",
+            scrollTrigger: {
+              trigger: cardsRef.current,
               start: "top 80%",
             },
           }
@@ -54,160 +176,271 @@ export default function PricingSection() {
   }, []);
 
   return (
-    <section ref={sectionRef} id="pricing" className="py-16 lg:py-24 bg-white">
+    <section ref={sectionRef} id="pricing" className="py-20 lg:py-28 bg-white font-[family-name:var(--font-space-grotesk)]">
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
         
-        {/* Rounded Card Container with last_page.png as CSS Background */}
+        {/* Main Title & Subtitle */}
+        <div className="text-center max-w-3xl mx-auto mb-8 space-y-3">
+          <h2
+            ref={titleRef}
+            className="text-3xl sm:text-4xl lg:text-[50px] font-semibold text-[#1C2228] tracking-tight leading-[1.15]"
+          >
+            Transparent Pricing for Flawless Events
+          </h2>
+          <p
+            ref={subtitleRef}
+            className="text-sm sm:text-base text-gray-500 font-normal leading-relaxed max-w-2xl mx-auto"
+          >
+            Choose the perfect plan to streamline your invitations, secure your entry points, and manage your attendees effortlessly.
+          </p>
+        </div>
+
+        {/* 3 Top Value Badges */}
         <div
-          ref={containerRef}
-          className="relative rounded-[32px] overflow-hidden shadow-2xl p-8 sm:p-12 lg:p-16 text-center text-white"
-          style={{
-            backgroundImage: "url('/last_page.png')",
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-          }}
+          ref={badgesRef}
+          className="flex flex-wrap items-center justify-center gap-6 sm:gap-10 mb-14 text-xs sm:text-sm font-semibold text-[#1C2228]"
         >
-          {/* Subtle overlay */}
-          <div className="absolute inset-0 bg-black/10 pointer-events-none z-0" />
-
-          <div className="relative z-10 max-w-5xl mx-auto">
-            
-            {/* Header: PRICING badge & Title */}
-            <div className="text-center mb-10 space-y-2">
-              <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-orange-200">
-                <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 16 16" fill="none">
-                  <rect x="2" y="2" width="5" height="5" rx="1" fill="#FF5B22" />
-                  <rect x="9" y="2" width="5" height="5" rx="1" fill="#FF5B22" />
-                  <rect x="2" y="9" width="5" height="5" rx="1" fill="#FF5B22" />
-                  <rect x="9" y="9" width="5" height="5" rx="1" fill="#FF5B22" />
-                </svg>
-                <span>PRICING</span>
-              </div>
-
-              <h2 ref={titleRef} className="text-3xl sm:text-4xl lg:text-5xl font-medium text-white tracking-tight font-[family-name:var(--font-space-grotesk)]">
-                Our Pricing
-              </h2>
-            </div>
-
-            {/* Dual Cards Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-stretch text-left">
-              
-              {/* Card 1: Main Pricing Offer Card (White) */}
-              <div className="lg:col-span-7 bg-white text-gray-900 rounded-md p-6 sm:p-8 shadow-xl flex flex-col justify-between">
-                <div>
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-6 items-center">
-                    
-                    {/* Left Column: Pricing Tag */}
-                    <div className="sm:col-span-6 space-y-1.5 border-b sm:border-b-0 sm:border-r border-gray-100 pb-5 sm:pb-0 sm:pr-6">
-                      <span className="text-sm font-bold text-gray-800 font-[family-name:var(--font-space-grotesk)]">
-                        Starting from just
-                      </span>
-                      
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-3xl sm:text-4xl lg:text-[40px] font-extrabold text-gray-900 tracking-tight font-[family-name:var(--font-space-grotesk)]">
-                          ₹11.99
-                        </span>
-                        <span className="text-xs font-semibold text-gray-400">
-                          / each Invitations
-                        </span>
-                      </div>
-                      
-                      <p className="text-xs text-gray-500 font-medium leading-relaxed pt-1">
-                        Register now and receive 20 free guest registrations.
-                      </p>
-                    </div>
-
-                    {/* Right Column: Feature Checklist */}
-                    <div className="sm:col-span-6 space-y-3">
-                      <div className="flex items-start gap-2.5">
-                        <div className="w-4 h-4 rounded-full bg-[#10B981] flex items-center justify-center shrink-0 mt-0.5">
-                          <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                          </svg>
-                        </div>
-                        <p className="text-xs font-medium text-gray-700 leading-snug">
-                          Register now and create your first event.
-                        </p>
-                      </div>
-
-                      <div className="flex items-start gap-2.5">
-                        <div className="w-4 h-4 rounded-full bg-[#10B981] flex items-center justify-center shrink-0 mt-0.5">
-                          <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                          </svg>
-                        </div>
-                        <p className="text-xs font-medium text-gray-700 leading-snug">
-                          Invite your guests in a smarter way.
-                        </p>
-                      </div>
-
-                      <div className="flex items-start gap-2.5">
-                        <div className="w-4 h-4 rounded-full bg-[#10B981] flex items-center justify-center shrink-0 mt-0.5">
-                          <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                          </svg>
-                        </div>
-                        <p className="text-xs font-medium text-gray-700 leading-snug">
-                          Real time analytics for planning ahead.
-                        </p>
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
-
-                {/* Sign Up Free CTA Button */}
-                <div className="mt-6">
-                  <a
-                    href="#signup"
-                    className="block w-full text-center py-3 px-6 bg-[#FF5B22] hover:bg-[#E04B16] text-white font-bold text-xs sm:text-sm rounded-md shadow-md transition-colors font-[family-name:var(--font-space-grotesk)] cursor-pointer"
-                  >
-                    Sign Up Free
-                  </a>
-                </div>
-              </div>
-
-              {/* Card 2: Contact Us Card (Dark Card Background) */}
-              <div id="contact" className="lg:col-span-5 bg-[#1C2228] text-white rounded-2xl p-6 sm:p-8 shadow-xl flex flex-col justify-between border border-gray-800/60">
-                <div>
-                  {/* Address Book Icon */}
-                  <div className="mb-4">
-                    <svg className="w-8 h-8 text-[#FF5B22]" viewBox="0 0 32 32" fill="none">
-                      <rect x="9" y="4" width="18" height="24" rx="4" stroke="#FF5B22" strokeWidth="2.2" />
-                      <path d="M6 9h4M6 16h4M6 23h4" stroke="#FF5B22" strokeWidth="2.2" strokeLinecap="round" />
-                      <circle cx="18" cy="12" r="3.5" stroke="#FF5B22" strokeWidth="2" />
-                      <path d="M13 22a5 5 0 0110 0" stroke="#FF5B22" strokeWidth="2" strokeLinecap="round" />
-                    </svg>
-                  </div>
-
-                  <h3 className="text-lg sm:text-xl font-bold text-white mb-2 font-[family-name:var(--font-space-grotesk)]">
-                    Contact Us
-                  </h3>
-
-                  <p className="text-xs text-gray-300 leading-relaxed font-[family-name:var(--font-space-grotesk)]">
-                    If you are considering a high-volume purchase and need more details, we would be happy to assist you.
-                  </p>
-                </div>
-
-                {/* Contact Us Button */}
-                <div className="mt-6">
-                  <button
-                    onClick={() => setContactSubmitted(true)}
-                    className="w-full py-3 px-6 bg-white hover:bg-gray-100 text-[#FF5B22] font-bold text-xs sm:text-sm rounded-md transition-colors shadow-md font-[family-name:var(--font-space-grotesk)] cursor-pointer"
-                  >
-                    {contactSubmitted ? "Message Sent!" : "Contact Us"}
-                  </button>
-                </div>
-              </div>
-
-            </div>
-
+          <div className="flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-[#FF7338]/20 text-[#FF5B22] flex items-center justify-center text-xs font-bold shrink-0">
+              ✓
+            </span>
+            <span>Free 15-day trial</span>
           </div>
+          
+          <div className="w-[1px] h-4 bg-gray-200 hidden sm:block" />
+
+          <div className="flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-[#FF7338]/20 text-[#FF5B22] flex items-center justify-center text-xs font-bold shrink-0">
+              ✓
+            </span>
+            <span>Unlimited Team Members</span>
+          </div>
+
+          <div className="w-[1px] h-4 bg-gray-200 hidden sm:block" />
+
+          <div className="flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-[#FF7338]/20 text-[#FF5B22] flex items-center justify-center text-xs font-bold shrink-0">
+              ✓
+            </span>
+            <span>Cancel Anytime</span>
+          </div>
+        </div>
+
+        {/* Billing Cycle Toggle + "get 3 months free" Cursive Callout with Slanted SVG Arrow */}
+        <div ref={toggleRef} className="flex justify-center mb-16 relative">
+          <div className="relative inline-flex items-center gap-4">
+            
+            {/* Cursive Callout + Curved SVG Arrow */}
+            <div className="absolute -top-14 -left-12 sm:-left-16 flex flex-col items-start pointer-events-none z-10">
+              <span
+                ref={handwrittenTextRef}
+                className="font-[family-name:var(--font-caveat)] text-2xl sm:text-[28px] text-[#1C2228] font-bold -rotate-12 -ml-18 mt-4 whitespace-nowrap tracking-wide leading-none mb-1 inline-block pr-4"
+              >
+                get 3 months free
+              </span>
+              
+              {/* Curved SVG arrow starting from above "Billed Yearly", looping/arching upward to point to the text */}
+              <svg className="w-14 h-11 text-[#FF5B22] ml-3 -mt-3.5 overflow-visible" viewBox="0 0 55 40" fill="none">
+                {/* Looped curve arching up-left */}
+                <path
+                  ref={arrowPathRef}
+                  d="M 44 32 C 34 34, 22 30, 20 22 C 18 14, 28 16, 26 24 C 24 30, 16 26, 12 14"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                {/* Arrowhead pointing up-left towards cursive text */}
+                <path
+                  ref={arrowHeadRef}
+                  d="M 6 18 L 11 11 L 18 16"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+
+            {/* Billed Yearly Label */}
+            <span
+              onClick={() => setBillingCycle("yearly")}
+              className={`text-xs sm:text-sm font-bold cursor-pointer transition-colors ${
+                billingCycle === "yearly" ? "text-[#1C2228]" : "text-gray-400"
+              }`}
+            >
+              Billed Yearly
+            </span>
+
+            {/* Switch Toggle Pill */}
+            <button
+              onClick={() => setBillingCycle(billingCycle === "yearly" ? "monthly" : "yearly")}
+              className="w-12 h-6 bg-gray-200 rounded-full p-0.5 transition-colors relative focus:outline-none cursor-pointer"
+            >
+              <div
+                className={`w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-300 ${
+                  billingCycle === "monthly" ? "translate-x-6" : "translate-x-0"
+                }`}
+              />
+            </button>
+
+            {/* Billed Monthly Label */}
+            <span
+              onClick={() => setBillingCycle("monthly")}
+              className={`text-xs sm:text-sm font-bold cursor-pointer transition-colors ${
+                billingCycle === "monthly" ? "text-[#1C2228]" : "text-gray-400"
+              }`}
+            >
+              Billed Monthly
+            </span>
+          </div>
+        </div>
+
+        {/* 3 Pricing Cards Grid (Exact PDF Design with 0px roundedness on middle dark card) */}
+        <div ref={cardsRef} className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 items-stretch">
+          
+          {/* 1. Standard Plan Card */}
+          <div className="bg-white border border-gray-200 rounded-none p-8 flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow">
+            <div>
+              <h3 className="text-xl font-bold text-[#1C2228] mb-2">Standard Plan</h3>
+              <div className="flex items-baseline gap-1 mb-1">
+                <span className="text-4xl lg:text-[44px] font-extrabold text-[#1C2228] tracking-tight">
+                  ₹1,999
+                </span>
+              </div>
+              <p className="text-xs text-gray-400 font-medium mb-8">Up to 250 Attendees per month</p>
+
+              {/* CTA Button */}
+              <button className="w-full py-3 px-4 border border-[#FF5B22] text-[#FF5B22] hover:bg-[#FF5B22] hover:text-white font-bold text-xs rounded-none transition-all cursor-pointer mb-8">
+                Start My 15-day Trial
+              </button>
+
+              {/* Divider */}
+              <div className="w-full h-[1px] bg-gray-100 mb-6" />
+
+              {/* Feature List */}
+              <ul className="space-y-4 text-xs text-gray-500 font-normal leading-relaxed">
+                <li className="flex items-start gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#FF5B22] shrink-0 mt-1.5" />
+                  <span>Up to 250 Smart QR Invitations sent via Email/WhatsApp</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#FF5B22] shrink-0 mt-1.5" />
+                  <span>Secured Access Control: Basic dynamic QR generation to prevent duplicate entries</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#FF5B22] shrink-0 mt-1.5" />
+                  <span>Single-Session Check-in: One main gate scanning entry</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#FF5B22] shrink-0 mt-1.5" />
+                  <span>Essential Order/Attendee Info: Basic RSVP tracking and real-time dashboard</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#FF5B22] shrink-0 mt-1.5" />
+                  <span>Self-Serve Setup: Easy-to-use template builder for invitations</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#FF5B22] shrink-0 mt-1.5" />
+                  <span>Standard Support: Email support within 24 hours</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* 2. Professional Plan Card (Dark Slate Background, Most Popular Badge, Sharp 0px corners) */}
+          <div className="bg-[#262B35] text-white rounded-none p-8 flex flex-col justify-between shadow-2xl relative border border-gray-800">
+            <div>
+              <h3 className="text-xl font-bold text-white mb-2">Professional Plan</h3>
+              
+              {/* Most Popular Badge */}
+              <div className="inline-block bg-[#FF5B22] text-white text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-none mb-3 tracking-wider">
+                Most Popular
+              </div>
+
+              <div className="flex items-baseline gap-1 mb-1">
+                <span className="text-4xl lg:text-[44px] font-extrabold text-white tracking-tight">
+                  ₹3,999
+                </span>
+              </div>
+              <p className="text-xs text-gray-400 font-medium mb-8">Up to 1,500 Attendees per month</p>
+
+              {/* CTA Button */}
+              <button className="w-full py-3 px-4 bg-[#FF5B22] hover:bg-[#E04B16] text-white font-bold text-xs rounded-none transition-all cursor-pointer shadow-md mb-8">
+                Start My 15-day Trial
+              </button>
+
+              {/* Divider */}
+              <div className="w-full h-[1px] bg-gray-700/60 mb-6" />
+
+              {/* Feature List */}
+              <ul className="space-y-4 text-xs text-gray-300 font-normal leading-relaxed">
+                <li className="flex items-start gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#FF5B22] shrink-0 mt-1.5" />
+                  <span>Up to 1,500 Smart QR Invitations sent via Email/WhatsApp</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#FF5B22] shrink-0 mt-1.5" />
+                  <span>Session-Wise Control: Manage separate entry permissions for up to 5 individual tracks or segments (e.g., Breakfast, Lunch, Dinner, Gaming Zones, VIP Lounges)</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#FF5B22] shrink-0 mt-1.5" />
+                  <span>Custom Branding: Remove platform watermarks and use your company's brand identity, logos, and custom colors</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#FF5B22] shrink-0 mt-1.5" />
+                  <span>Multi-Device Syncing: Allow up to 5 ground-crew members to scan and sync check-ins simultaneously in real-time</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* 3. Enterprise Plan Card */}
+          <div className="bg-white border border-gray-200 rounded-none p-8 flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow">
+            <div>
+              <h3 className="text-xl font-bold text-[#1C2228] mb-2">Enterprise Plan</h3>
+              <div className="flex items-baseline gap-1 mb-1">
+                <span className="text-4xl lg:text-[44px] font-extrabold text-[#1C2228] tracking-tight">
+                  ₹5,999
+                </span>
+              </div>
+              <p className="text-xs text-gray-400 font-medium mb-8">
+                1,500+ Attendees & High-Volume Agencies
+              </p>
+
+              {/* CTA Button */}
+              <button className="w-full py-3 px-4 border border-[#FF5B22] text-[#FF5B22] hover:bg-[#FF5B22] hover:text-white font-bold text-xs rounded-none transition-all cursor-pointer mb-8">
+                Start My 15-day Trial
+              </button>
+
+              {/* Divider */}
+              <div className="w-full h-[1px] bg-gray-100 mb-6" />
+
+              {/* Feature List */}
+              <ul className="space-y-4 text-xs text-gray-500 font-normal leading-relaxed">
+                <li className="flex items-start gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#FF5B22] shrink-0 mt-1.5" />
+                  <span>Unlimited Smart QR Invitations & Attendee Capacity</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#FF5B22] shrink-0 mt-1.5" />
+                  <span>Unlimited Session-Wise Tracking: Complete granular control across endless breakout rooms, sub-events, and VIP segments</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#FF5B22] shrink-0 mt-1.5" />
+                  <span>Dedicated Account Manager & On-Ground Support: Remote or physical standby support to ensure zero entry bottlenecks on event day</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#FF5B22] shrink-0 mt-1.5" />
+                  <span>Advanced API & CRM Integrations: Seamlessly sync attendee data with HubSpot, Salesforce, or your existing marketing stacks</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
         </div>
 
       </div>
     </section>
   );
 }
-
-
