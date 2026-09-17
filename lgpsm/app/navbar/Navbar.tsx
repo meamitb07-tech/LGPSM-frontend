@@ -27,19 +27,19 @@ export default function Navbar() {
           {/* Nav links */}
           <nav className="hidden md:flex items-center gap-7">
             <Link
-              href="/pages/features"
+              href="/features"
               className="text-sm font-semibold text-gray-700 hover:text-[#FF5B22] transition-colors font-[family-name:var(--font-space-grotesk)]"
             >
               Features
             </Link>
             <Link
-              href="/pages/pricing"
+              href="/pricing"
               className="text-sm font-semibold text-gray-700 hover:text-[#FF5B22] transition-colors font-[family-name:var(--font-space-grotesk)]"
             >
               Pricing
             </Link>
             <Link
-              href="/pages/contact"
+              href="/contact"
               className="text-sm font-semibold text-gray-700 hover:text-[#FF5B22] transition-colors font-[family-name:var(--font-space-grotesk)]"
             >
               Contact
@@ -50,13 +50,13 @@ export default function Navbar() {
         {/* Action Buttons */}
         <div className="hidden md:flex items-center gap-4">
           <Link
-            href="/pages/signin"
+            href="/signin"
             className="text-sm font-semibold text-gray-700 hover:text-[#FF5B22] px-3 py-2 transition-colors font-[family-name:var(--font-space-grotesk)]"
           >
             Sign In
           </Link>
           <Link
-            href="/pages/signup"
+            href="/signup"
             className="px-5 py-2.5 text-sm font-bold text-white bg-[#FF5B22] hover:bg-[#E04B16] rounded-md shadow-sm transition-all active:scale-95 font-[family-name:var(--font-space-grotesk)]"
           >
             Sign Up Free
@@ -77,12 +77,12 @@ export default function Navbar() {
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
         <div className="md:hidden bg-white border-b border-gray-200 px-4 pt-3 pb-6 space-y-3 font-[family-name:var(--font-space-grotesk)]">
-          <Link href="/pages/features" className="block py-2 text-sm font-semibold text-gray-700">Features</Link>
-          <Link href="/pages/pricing" className="block py-2 text-sm font-semibold text-gray-700">Pricing</Link>
-          <Link href="/pages/contact" className="block py-2 text-sm font-semibold text-gray-700">Contact</Link>
+          <Link href="/features" className="block py-2 text-sm font-semibold text-gray-700">Features</Link>
+          <Link href="/pricing" className="block py-2 text-sm font-semibold text-gray-700">Pricing</Link>
+          <Link href="/contact" className="block py-2 text-sm font-semibold text-gray-700">Contact</Link>
           <div className="pt-2 flex flex-col gap-2">
-            <Link href="/pages/signin" className="w-full text-center py-2 text-sm font-semibold text-gray-700 border border-gray-200 rounded-lg">Sign In</Link>
-            <Link href="/pages/signup" className="w-full text-center py-2.5 text-sm font-bold text-white bg-[#FF5B22] rounded-lg">Sign Up Free</Link>
+            <Link href="/signin" className="w-full text-center py-2 text-sm font-semibold text-gray-700 border border-gray-200 rounded-lg">Sign In</Link>
+            <Link href="/signup" className="w-full text-center py-2.5 text-sm font-bold text-white bg-[#FF5B22] rounded-lg">Sign Up Free</Link>
           </div>
         </div>
       )}

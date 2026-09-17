@@ -92,7 +92,7 @@ export default function ContactPage() {
                   return (
                     <polygon
                       key={i}
-                      points={`${cx},${cy} ${x1},${y1} ${x2},${y2}`}
+                      points={`${cx},${cy} ${x1.toFixed(4)},${y1.toFixed(4)} ${x2.toFixed(4)},${y2.toFixed(4)}`}
                       fill="#FFFFFF"
                     />
                   );

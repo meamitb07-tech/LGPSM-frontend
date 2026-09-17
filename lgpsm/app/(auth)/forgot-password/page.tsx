@@ -1,27 +1,91 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
+import { authService } from "../../services/authService";
 
 type ForgotStage = "04A" | "04B" | "04C" | "04D";
 
-export default function ForgotPasswordPage() {
+function ForgotPasswordContent() {
+  const searchParams = useSearchParams();
+  const tokenFromUrl = searchParams.get("token") || "";
+
   const [stage, setStage] = useState<ForgotStage>("04A");
   const [email, setEmail] = useState("");
+  const [resetToken, setResetToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [repeatPassword, setRepeatPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showRepeatPassword, setShowRepeatPassword] = useState(false);
 
-  const handleStageA = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [infoMessage, setInfoMessage] = useState("");
+
+  useEffect(() => {
+    if (tokenFromUrl) {
+      setResetToken(tokenFromUrl);
+      setStage("04C");
+    }
+  }, [tokenFromUrl]);
+
+  const handleStageA = async (e: React.FormEvent) => {
     e.preventDefault();
-    setStage("04B");
+    setErrorMessage("");
+    setInfoMessage("");
+    setIsSubmitting(true);
+
+    try {
+      const res = await authService.forgotPassword(email);
+      if (res.success) {
+        setInfoMessage(res.message || "If the email exists, a reset link has been generated.");
+        setStage("04B");
+      } else {
+        setErrorMessage(res.message || "Failed to process request. Please try again.");
+      }
+    } catch {
+      setErrorMessage("An error occurred. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleStageC = (e: React.FormEvent) => {
+  const handleStageC = async (e: React.FormEvent) => {
     e.preventDefault();
-    setStage("04D");
+    setErrorMessage("");
+    setInfoMessage("");
+
+    if (newPassword !== repeatPassword) {
+      setErrorMessage("Passwords do not match. Please re-enter.");
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setErrorMessage("Password must be at least 8 characters long.");
+      return;
+    }
+
+    if (!resetToken) {
+      setErrorMessage("Password reset token is required. Please check your reset link.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const res = await authService.resetPassword(resetToken, newPassword);
+      if (res.success) {
+        setStage("04D");
+      } else {
+        setErrorMessage(res.message || "Failed to reset password. Token may be invalid or expired.");
+      }
+    } catch {
+      setErrorMessage("An error occurred during password reset.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -65,7 +129,7 @@ export default function ForgotPasswordPage() {
 
       {/* ── Left Hero Side (Orange Panel) ── */}
       <div className="hidden lg:flex w-[40%] xl:w-[42%] bg-[#FF5B22] items-center relative shrink-0 h-full">
-        {/* Soft Radial Sunburst Ray Background (Clipped inside the left orange panel) */}
+        {/* Soft Radial Sunburst Ray Background */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
           <svg className="w-full h-full object-cover" viewBox="0 0 600 600" fill="none">
             {Array.from({ length: 24 }).map((_, i) => {
@@ -74,7 +138,7 @@ export default function ForgotPasswordPage() {
               return (
                 <polygon
                   key={i}
-                  points={`300,300 ${300 + 900 * Math.cos(rad - 0.1)},${300 + 900 * Math.sin(rad - 0.1)} ${300 + 900 * Math.cos(rad + 0.1)},${300 + 900 * Math.sin(rad + 0.1)}`}
+                  points={`300,300 ${(300 + 900 * Math.cos(rad - 0.1)).toFixed(4)},${(300 + 900 * Math.sin(rad - 0.1)).toFixed(4)} ${(300 + 900 * Math.cos(rad + 0.1)).toFixed(4)},${(300 + 900 * Math.sin(rad + 0.1)).toFixed(4)}`}
                   fill="#FFFFFF"
                 />
               );
@@ -82,7 +146,7 @@ export default function ForgotPasswordPage() {
           </svg>
         </div>
 
-        {/* ── Overlapping Image Card: Sticks out to the right OVER the white background ── */}
+        {/* Overlapping Image Card */}
         <div className="relative z-20 w-[100%] h-[85vh] max-h-[720px] rounded-[12px] overflow-hidden shadow-[0_15px_30px_rgba(0,0,0,0.35)] border border-white/20 ml-8 xl:ml-12 shrink-0 my-auto">
           <Image
             src="/Auth.png"
@@ -94,7 +158,7 @@ export default function ForgotPasswordPage() {
         </div>
       </div>
 
-      {/* ── Right Content Side (Spaced to accommodate the overlapping card) ── */}
+      {/* ── Right Content Side ── */}
       <div className="w-full lg:w-[60%] xl:w-[58%] flex flex-col justify-center p-6 sm:p-10 lg:py-6 lg:pl-32 lg:pr-16 max-w-[700px] relative z-10 my-auto overflow-y-auto lg:overflow-y-visible">
         <div className="w-full">
           {/* Brand Logo */}
@@ -118,7 +182,7 @@ export default function ForgotPasswordPage() {
                 onClick={() => {
                   if (stage === "04B") setStage("04A");
                   else if (stage === "04C") setStage("04B");
-                  else window.location.href = "/pages/signin";
+                  else window.location.href = "/signin";
                 }}
                 className="inline-flex items-center gap-2 text-xs font-semibold text-gray-900 hover:text-[#FF5B22] transition-colors cursor-pointer"
               >
@@ -130,6 +194,26 @@ export default function ForgotPasswordPage() {
             </div>
           )}
 
+          {/* Error Banner */}
+          {errorMessage && (
+            <div className="mb-6 p-3 bg-red-50 border border-red-200 text-red-600 text-xs sm:text-sm rounded-lg flex items-center gap-2">
+              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
+          {/* Info Banner */}
+          {infoMessage && (
+            <div className="mb-6 p-3 bg-blue-50 border border-blue-200 text-blue-700 text-xs sm:text-sm rounded-lg flex items-center gap-2">
+              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{infoMessage}</span>
+            </div>
+          )}
+
           {/* ───────────── STAGE 04A: ENTER EMAIL ───────────── */}
           {stage === "04A" && (
             <div>
@@ -137,7 +221,7 @@ export default function ForgotPasswordPage() {
                 Forgot password
               </h1>
               <p className="text-xs sm:text-sm text-gray-500 font-normal leading-relaxed mb-8">
-                No worries! Enter email address below, and we'll send you a link to reset your password.
+                No worries! Enter email address below, and we&apos;ll send you a link to reset your password.
               </p>
 
               <form onSubmit={handleStageA} className="space-y-5">
@@ -151,15 +235,17 @@ export default function ForgotPasswordPage() {
                     placeholder="hello@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 bg-[#F8F9FA] border border-gray-200/90 rounded-lg text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-gray-300 transition-all font-[family-name:var(--font-space-grotesk)]"
+                    disabled={isSubmitting}
+                    className="w-full px-4 py-3 bg-[#F8F9FA] border border-gray-200/90 rounded-lg text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-gray-300 transition-all font-[family-name:var(--font-space-grotesk)] disabled:opacity-60"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-3.5 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-sm font-bold rounded-lg shadow-sm transition-all cursor-pointer mt-4"
+                  disabled={isSubmitting}
+                  className="w-full py-3.5 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-sm font-bold rounded-lg shadow-sm transition-all cursor-pointer mt-4 disabled:opacity-60 flex items-center justify-center gap-2"
                 >
-                  Submit
+                  {isSubmitting ? "Submitting..." : "Submit"}
                 </button>
               </form>
             </div>
@@ -180,7 +266,7 @@ export default function ForgotPasswordPage() {
                 Check your email
               </h1>
               <p className="text-xs sm:text-sm text-gray-500 font-normal leading-relaxed mb-8 max-w-md">
-                We sent a password resent link to your email. Please check your inbox
+                We sent a password reset link to your email. Please check your inbox.
               </p>
 
               <button
@@ -188,11 +274,11 @@ export default function ForgotPasswordPage() {
                 onClick={() => setStage("04C")}
                 className="w-full py-3.5 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-sm font-bold rounded-lg shadow-sm transition-all cursor-pointer mb-6"
               >
-                Open Gmail
+                Proceed to Reset Password
               </button>
 
               <div className="text-center text-xs text-gray-500">
-                Don't received the email?{" "}
+                Didn&apos;t receive the email?{" "}
                 <button
                   type="button"
                   onClick={() => setStage("04A")}
@@ -211,10 +297,27 @@ export default function ForgotPasswordPage() {
                 Create a new password
               </h1>
               <p className="text-xs sm:text-sm text-gray-500 font-normal leading-relaxed mb-8">
-                Enter your new password below to complete the reset process. Ensure it's strong and secure
+                Enter your new password below to complete the reset process. Ensure it&apos;s strong and secure.
               </p>
 
               <form onSubmit={handleStageC} className="space-y-4">
+                {!tokenFromUrl && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-900 mb-1.5">
+                      Reset Token<span className="text-[#FF5B22] ml-0.5">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Paste your reset token"
+                      value={resetToken}
+                      onChange={(e) => setResetToken(e.target.value)}
+                      disabled={isSubmitting}
+                      className="w-full px-4 py-3 bg-[#F8F9FA] border border-gray-200/90 rounded-lg text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-gray-300 transition-all font-[family-name:var(--font-space-grotesk)] disabled:opacity-60"
+                    />
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-xs font-semibold text-gray-900 mb-1.5">
                     New Password<span className="text-[#FF5B22] ml-0.5">*</span>
@@ -223,10 +326,11 @@ export default function ForgotPasswordPage() {
                     <input
                       type={showNewPassword ? "text" : "password"}
                       required
-                      placeholder="Type your password"
+                      placeholder="Type your new password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full px-4 py-3 bg-[#F8F9FA] border border-gray-200/90 rounded-lg text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-gray-300 transition-all pr-10 font-[family-name:var(--font-space-grotesk)]"
+                      disabled={isSubmitting}
+                      className="w-full px-4 py-3 bg-[#F8F9FA] border border-gray-200/90 rounded-lg text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-gray-300 transition-all pr-10 font-[family-name:var(--font-space-grotesk)] disabled:opacity-60"
                     />
                     <button
                       type="button"
@@ -245,9 +349,6 @@ export default function ForgotPasswordPage() {
                       )}
                     </button>
                   </div>
-                  <div className="text-[11px] text-gray-400 font-normal text-right mt-1">
-                    Must be at least 10 characters
-                  </div>
                 </div>
 
                 <div>
@@ -258,10 +359,11 @@ export default function ForgotPasswordPage() {
                     <input
                       type={showRepeatPassword ? "text" : "password"}
                       required
-                      placeholder="Type your password"
+                      placeholder="Repeat your password"
                       value={repeatPassword}
                       onChange={(e) => setRepeatPassword(e.target.value)}
-                      className="w-full px-4 py-3 bg-[#F8F9FA] border border-gray-200/90 rounded-lg text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-gray-300 transition-all pr-10 font-[family-name:var(--font-space-grotesk)]"
+                      disabled={isSubmitting}
+                      className="w-full px-4 py-3 bg-[#F8F9FA] border border-gray-200/90 rounded-lg text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-gray-300 transition-all pr-10 font-[family-name:var(--font-space-grotesk)] disabled:opacity-60"
                     />
                     <button
                       type="button"
@@ -284,9 +386,10 @@ export default function ForgotPasswordPage() {
 
                 <button
                   type="submit"
-                  className="w-full py-3.5 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-sm font-bold rounded-lg shadow-sm transition-all cursor-pointer mt-6"
+                  disabled={isSubmitting}
+                  className="w-full py-3.5 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-sm font-bold rounded-lg shadow-sm transition-all cursor-pointer mt-6 disabled:opacity-60 flex items-center justify-center gap-2"
                 >
-                  Submit
+                  {isSubmitting ? "Resetting Password..." : "Submit"}
                 </button>
               </form>
             </div>
@@ -305,11 +408,11 @@ export default function ForgotPasswordPage() {
                 Your password has been successfully reset!
               </h1>
               <p className="text-xs sm:text-sm text-gray-500 font-normal leading-relaxed mb-8 max-w-md">
-                You can now log in with your new password. If you encounter any issues, please contact support
+                You can now log in with your new password. If you encounter any issues, please contact support.
               </p>
 
               <Link
-                href="/pages/signin"
+                href="/signin"
                 className="block w-full text-center py-3.5 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-sm font-bold rounded-lg shadow-sm transition-all"
               >
                 Back to login
@@ -319,5 +422,13 @@ export default function ForgotPasswordPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ForgotPasswordPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-sm font-semibold">Loading...</div>}>
+      <ForgotPasswordContent />
+    </Suspense>
   );
 }
