@@ -53,7 +53,7 @@ export default function Sidebar({ activeItem = "dashboard" }: SidebarProps) {
 
   const isSettingsGroupActive = activeItem === "settings";
 
-  const [isEventOpen, setIsEventOpen] = useState(isEventGroupActive || true);
+  const [isEventOpen, setIsEventOpen] = useState<boolean>(true);
   const [isOrganizerOpen, setIsOrganizerOpen] = useState(isOrganizerGroupActive);
   const [isSettingsOpen, setIsSettingsOpen] = useState(isSettingsGroupActive);
 
