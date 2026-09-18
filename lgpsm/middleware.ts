@@ -5,8 +5,8 @@ export function middleware(request: NextRequest) {
   const token = request.cookies.get("lgpsm_access_token")?.value;
   const { pathname } = request.nextUrl;
 
-  // Protect all dashboard and event creation routes
-  const protectedRoutes = ["/dashboard", "/events"];
+  // Protect all dashboard, event creation, and user management routes
+  const protectedRoutes = ["/dashboard", "/events", "/user-management"];
 
   const isProtectedRoute = protectedRoutes.some((route) =>
     pathname.startsWith(route)
@@ -22,5 +22,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/events/:path*"],
+  matcher: ["/dashboard/:path*", "/events/:path*", "/user-management/:path*"],
 };
