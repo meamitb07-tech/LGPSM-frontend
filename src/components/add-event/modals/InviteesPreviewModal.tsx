@@ -15,6 +15,7 @@ interface InviteeRow {
 interface InviteesPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSave?: (updatedList: InviteeRow[]) => void;
   inviteesList?: InviteeRow[];
   sessionName?: string;
 }
@@ -33,6 +34,7 @@ const DEFAULT_INVITEES: InviteeRow[] = [
 export default function InviteesPreviewModal({
   isOpen,
   onClose,
+  onSave,
   inviteesList = DEFAULT_INVITEES,
   sessionName = "Session 1 - Entry Session",
 }: InviteesPreviewModalProps) {
@@ -41,8 +43,15 @@ export default function InviteesPreviewModal({
 
   const [list, setList] = useState<InviteeRow[]>(inviteesList);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedSession, setSelectedSession] = useState(sessionName);
   const [editingInvitee, setEditingInvitee] = useState<InviteeRow | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (inviteesList) {
+      setList(inviteesList);
+    }
+  }, [inviteesList]);
 
   useEffect(() => {
     if (isOpen && overlayRef.current && modalRef.current) {
@@ -85,10 +94,10 @@ export default function InviteesPreviewModal({
       >
         <div
           ref={modalRef}
-          className="bg-white rounded-xl shadow-2xl max-w-3xl w-full overflow-hidden flex flex-col max-h-[90vh] my-auto border border-gray-100 relative"
+          className="bg-white rounded-md border border-gray-200 shadow-2xl max-w-3xl w-full overflow-hidden flex flex-col max-h-[90vh] my-auto relative"
         >
-          {/* Modal Header (Image #1) */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          {/* Header (Image 2) */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
             <h2 className="text-base font-bold text-gray-900">
               Invitees List Preview{" "}
               <span className="text-xs font-normal text-gray-500">
@@ -105,64 +114,69 @@ export default function InviteesPreviewModal({
             </button>
           </div>
 
-          {/* Filters (Image #1) */}
-          <div className="p-6 pb-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-gray-900 mb-1.5">Session</label>
-              <select className="w-full px-3.5 py-2.5 bg-[#F9FAFB] border border-gray-200 rounded-md text-xs font-medium text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#FF5B22] focus:border-[#FF5B22] cursor-pointer">
-                <option>{sessionName}</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-900 mb-1.5">Search</label>
+          {/* Filters (Image #3) */}
+          <div className="p-6 pb-2 space-y-1.5">
+            <label className="block text-xs font-bold text-gray-900">Search</label>
+            <div className="flex items-center border border-gray-200 rounded-md overflow-hidden bg-[#F9FAFB] focus-within:border-[#FF5B22] focus-within:ring-1 focus-within:ring-[#FF5B22]">
               <input
                 type="text"
                 placeholder="Search by name"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-[#F9FAFB] border border-gray-200 rounded-md text-xs font-medium text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-[#FF5B22] focus:border-[#FF5B22]"
+                className="flex-1 px-3.5 py-2.5 bg-transparent text-xs font-medium text-gray-800 placeholder:text-gray-400 focus:outline-none"
               />
+              <div className="border-l border-gray-200 px-3 py-2 bg-white flex items-center shrink-0">
+                <select
+                  value={selectedSession}
+                  onChange={(e) => setSelectedSession(e.target.value)}
+                  className="text-xs font-semibold text-gray-800 bg-transparent focus:outline-none cursor-pointer pr-1"
+                >
+                  <option value="Session 1 - Entry Session">Session 1 - Entry Session</option>
+                  <option value="Session 2 - Lunch Session">Session 2 - Lunch Session</option>
+                </select>
+              </div>
             </div>
           </div>
 
-          {/* Table Content (Image #1) */}
+          {/* Table Content (Image #3) */}
           <div className="flex-1 overflow-y-auto px-6 py-3 min-h-[300px]">
             <p className="text-xs font-bold text-gray-900 mb-2">Lists</p>
             <div className="border border-gray-200 rounded-md overflow-hidden">
               <table className="w-full text-left text-xs">
                 <thead className="bg-[#F4F5F8] border-b border-gray-200 text-gray-700 font-bold">
                   <tr>
-                    <th className="px-4 py-3">#</th>
-                    <th className="px-4 py-3">Name</th>
-                    <th className="px-4 py-3">Email</th>
-                    <th className="px-4 py-3">Phone no.</th>
-                    <th className="px-4 py-3 text-center">Actions</th>
+                    <th className="px-4 py-3 w-12 text-gray-900 font-bold">#</th>
+                    <th className="px-4 py-3 text-gray-900 font-bold">Name</th>
+                    <th className="px-4 py-3 text-gray-900 font-bold">Email</th>
+                    <th className="px-4 py-3 text-gray-900 font-bold">Phone no.</th>
+                    <th className="px-4 py-3 text-center text-gray-900 font-bold">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-gray-800 font-medium">
                   {filteredList.map((row) => (
                     <tr key={row.id} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="px-4 py-3.5 text-gray-400 font-mono">{row.id}</td>
-                      <td className="px-4 py-3.5 font-bold text-gray-900">{row.name}</td>
-                      <td className="px-4 py-3.5 text-gray-500">{row.email}</td>
-                      <td className="px-4 py-3.5 text-gray-500">{row.phone}</td>
+                      <td className="px-4 py-3.5 text-gray-500 font-mono text-xs">{row.id}</td>
+                      <td className="px-4 py-3.5 font-semibold text-gray-900">{row.name}</td>
+                      <td className="px-4 py-3.5 text-gray-600">{row.email}</td>
+                      <td className="px-4 py-3.5 text-gray-600">{row.phone}</td>
                       <td className="px-4 py-3.5">
-                        <div className="flex items-center justify-center gap-2">
-                          {/* Edit Action Icon Box (Image #1: Coral border & bg box with orange pencil) */}
+                        <div className="flex items-center justify-center gap-1.5">
+                          {/* Edit Action Box (Image #3: Rose/Orange border box with edit pencil icon) */}
                           <button
+                            type="button"
                             onClick={() => setEditingInvitee(row)}
-                            className="p-1.5 text-[#FF5B22] border border-[#FF5B22]/40 rounded-md bg-[#FFF0EB] hover:bg-[#FFE0D6] transition-colors cursor-pointer"
+                            className="p-1.5 text-[#FF5B22] border border-rose-300 rounded bg-[#FFF0EB] hover:bg-[#FFE5DC] transition-colors cursor-pointer"
                             title="Edit"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 210.3H3v-3.572L16.732 3.732z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                             </svg>
                           </button>
-                          {/* Delete Action Icon Box (Image #1: Coral border & bg box with orange trash) */}
+                          {/* Delete Action Box (Image #3: Rose/Orange border box with trash icon) */}
                           <button
+                            type="button"
                             onClick={() => setDeletingId(row.id)}
-                            className="p-1.5 text-[#FF5B22] border border-[#FF5B22]/40 rounded-md bg-[#FFF0EB] hover:bg-[#FFE0D6] transition-colors cursor-pointer"
+                            className="p-1.5 text-[#FF5B22] border border-rose-300 rounded bg-[#FFF0EB] hover:bg-[#FFE5DC] transition-colors cursor-pointer"
                             title="Delete"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -178,10 +192,14 @@ export default function InviteesPreviewModal({
             </div>
           </div>
 
-          {/* Footer (Image #1: Bright Orange Save button) */}
-          <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+          {/* Footer (Image #3: Bright Orange Save button) */}
+          <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
             <button
-              onClick={onClose}
+              type="button"
+              onClick={() => {
+                if (onSave) onSave(list);
+                onClose();
+              }}
               className="px-7 py-2.5 bg-[#FF5B22] hover:bg-[#E04B16] text-white font-bold text-xs rounded-md transition-all shadow-xs cursor-pointer"
             >
               Save

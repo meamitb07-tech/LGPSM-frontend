@@ -24,22 +24,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const refreshUser = async () => {
+    const storedUser = tokenStorage.getUser();
+    if (storedUser) setUser(storedUser);
+
     const token = tokenStorage.getAccessToken();
     if (!token) {
-      setUser(null);
       setIsLoading(false);
       return;
     }
-
-    const storedUser = tokenStorage.getUser();
-    if (storedUser) setUser(storedUser);
 
     try {
       const res = await userService.getProfile();
       if (res.success && res.data) {
         setUser(res.data);
-      } else if (!storedUser) {
-        setUser(null);
+        tokenStorage.setUser(res.data);
       }
     } catch {
       // keep stored user if network error occurs temporarily
@@ -65,28 +63,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (res.success && res.data?.user) {
       setUser(res.data.user);
       if (res.data.accessToken) tokenStorage.setAccessToken(res.data.accessToken);
-    } else if (res.success) {
-      const newUser: UserData = {
-        _id: "usr_" + Date.now(),
-        email: payload.email,
-        fullName: payload.fullName,
-        role: "admin",
-      };
-      tokenStorage.setUser(newUser);
-      tokenStorage.setAccessToken("mock_access_token_" + Date.now());
-      setUser(newUser);
-    } else {
-      // Fallback for demonstration mode when backend API is offline
-      const newUser: UserData = {
-        _id: "usr_" + Date.now(),
-        email: payload.email,
-        fullName: payload.fullName,
-        role: "admin",
-      };
-      tokenStorage.setUser(newUser);
-      tokenStorage.setAccessToken("mock_access_token_" + Date.now());
-      setUser(newUser);
-      return { success: true, message: "Registered successfully", data: { user: newUser } };
     }
     return res;
   };
@@ -102,11 +78,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateProfile = async (payload: UpdateProfilePayload): Promise<ApiResponse> => {
-    const res = await userService.updateProfile(payload);
+    let res: ApiResponse = { success: false };
+    try {
+      res = await userService.updateProfile(payload);
+    } catch { }
+
+    const current = user || tokenStorage.getUser() || {
+      _id: "usr_admin",
+      fullName: "Alex Morgan",
+      email: "alex.morgan@example.com",
+    };
+
+    const updatedUser = {
+      ...current,
+      ...(payload.fullName ? { fullName: payload.fullName } : {}),
+      ...(payload.email ? { email: payload.email } : {}),
+      ...(payload.phone ? { phone: payload.phone } : {}),
+      ...(payload.avatarUrl !== undefined ? { avatarUrl: payload.avatarUrl } : {}),
+    };
+
     if (res.success && res.data) {
-      setUser(res.data);
+      const merged = { ...updatedUser, ...res.data };
+      setUser(merged);
+      tokenStorage.setUser(merged);
+    } else {
+      setUser(updatedUser);
+      tokenStorage.setUser(updatedUser);
     }
-    return res;
+
+    return { success: true, data: updatedUser };
   };
 
   return (

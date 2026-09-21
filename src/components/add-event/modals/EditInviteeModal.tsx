@@ -63,14 +63,14 @@ export default function EditInviteeModal({
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto font-sans"
+      className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto font-sans"
     >
       <div
         ref={modalRef}
-        className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col my-auto border border-gray-100"
+        className="bg-white rounded-md border border-gray-200 shadow-2xl max-w-md w-full overflow-hidden flex flex-col my-auto"
       >
         {/* Modal Header (Image #2) */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <h2 className="text-base font-bold text-gray-900">Edit Row</h2>
           <button
             onClick={onClose}
@@ -124,7 +124,7 @@ export default function EditInviteeModal({
           </div>
 
           {/* Footer Actions (Image #2) */}
-          <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
+          <div className="pt-4 border-t border-gray-200 flex justify-end gap-3">
             <button
               type="button"
               onClick={onClose}

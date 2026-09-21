@@ -112,9 +112,9 @@ export default function FaqSection() {
   return (
     <section ref={sectionRef} className="py-16 lg:py-24 bg-white border-t border-gray-100">
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-16 items-start">
-          
+
           {/* Left Column: Badge, Title & Accordions */}
           <div className="lg:col-span-7">
             {/* Badge */}
@@ -164,7 +164,7 @@ export default function FaqSection() {
 
           {/* Right Column: Contact Us Card */}
           <div className="lg:col-span-5 flex justify-center lg:justify-end lg:pt-10">
-            <div ref={cardRef} className="bg-[#F7F8FA] rounded-xl p-7 sm:p-8 border border-gray-100/80 shadow-sm w-full max-w-sm text-left">
+            <div ref={cardRef} className="bg-[#F7F8FA] rounded-md p-7 sm:p-8 border border-gray-100/80 shadow-sm w-full max-w-sm text-left">
               {/* Icon */}
               <div className="mb-5">
                 <svg className="w-9 h-9 text-[#FF5B22]" viewBox="0 0 32 32" fill="none">

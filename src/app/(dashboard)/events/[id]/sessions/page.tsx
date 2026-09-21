@@ -1,68 +1,144 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import Sidebar from "@/components/Sidebar";
 import { useAuth } from "@/context/AuthContext";
+import { sessionService } from "@/services/sessionService";
+import DateTimePickerModal from "@/components/add-event/modals/DateTimePickerModal";
+import EventSubNav from "@/components/EventSubNav";
 
-interface SessionItem {
-  id: string;
-  num: string;
-  title: string;
-  dateTime: string;
-  totalInvitees: number;
-  systemUsers: string;
-  accessControl: string;
+function getFormattedCurrentDateTime(offsetHours: number = 0): string {
+  const date = new Date(Date.now() + offsetHours * 3600 * 1000);
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yy = String(date.getFullYear()).slice(-2);
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  const hh = String(hours).padStart(2, "0");
+  return `${dd}/${mm}/${yy} ${hh}.${minutes} ${ampm}`;
 }
-
-const SAMPLE_SESSIONS: SessionItem[] = [
-  {
-    id: "1",
-    num: "01",
-    title: "Entry Session",
-    dateTime: "15/1/2026 10:00 AM",
-    totalInvitees: 510,
-    systemUsers: "04",
-    accessControl: "No Restriction",
-  },
-  {
-    id: "2",
-    num: "02",
-    title: "Drink Sessions",
-    dateTime: "15/1/2026 8:30 PM to 09:30 PM",
-    totalInvitees: 140,
-    systemUsers: "09",
-    accessControl: "Only Once",
-  },
-  {
-    id: "3",
-    num: "03",
-    title: "Dinner Sessions",
-    dateTime: "15/1/2026 10:00 PM to 11:30 PM",
-    totalInvitees: 510,
-    systemUsers: "25",
-    accessControl: "No Restriction",
-  },
-];
 
 export default function EventSessionsPage() {
   const params = useParams();
   const eventId = (params?.id as string) || "1";
   const { user } = useAuth();
 
-  const [sessions, setSessions] = useState<SessionItem[]>(SAMPLE_SESSIONS);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
+  // DatePicker Modal State
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [activeDateField, setActiveDateField] = useState<"start" | "end">("start");
+
+  const fetchSessions = async () => {
+    try {
+      setIsLoading(true);
+
+      // Check for locally cached invitees for total count fallback
+      let localInviteesCount = 0;
+      try {
+        const invKeys = [`app_local_invitees_${eventId}`, "app_local_invitees_1", "app_local_invitees"];
+        invKeys.forEach((key) => {
+          const cached = localStorage.getItem(key);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              localInviteesCount = Math.max(localInviteesCount, parsed.length);
+            }
+          }
+        });
+      } catch (e) { }
+
+      let fetchedApiSessions: any[] = [];
+      try {
+        const res = await sessionService.getSessions(eventId);
+        if (res.success && Array.isArray(res.data)) {
+          fetchedApiSessions = res.data;
+        }
+      } catch (e) { }
+
+      let localSessions: any[] = [];
+      try {
+        const sessKeys = [`app_local_sessions_${eventId}`, "app_local_sessions_1", "app_local_sessions"];
+        sessKeys.forEach((key) => {
+          const cached = localStorage.getItem(key);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed)) {
+              localSessions.push(...parsed);
+            }
+          }
+        });
+      } catch (e) { }
+
+      const combined = [...fetchedApiSessions, ...localSessions];
+
+      if (combined.length === 0) {
+        combined.push(
+          { id: "morning", _id: "morning", name: "Morning", title: "Morning", invitesCount: localInviteesCount, totalInvitees: localInviteesCount, maxAttendees: localInviteesCount },
+          { id: "entry", _id: "entry", name: "Session 1 - Entry Session", title: "Session 1 - Entry Session", invitesCount: localInviteesCount, totalInvitees: localInviteesCount, maxAttendees: localInviteesCount },
+          { id: "lunch", _id: "lunch", name: "Session 2 - Lunch Session", title: "Session 2 - Lunch Session", invitesCount: localInviteesCount, totalInvitees: localInviteesCount, maxAttendees: localInviteesCount }
+        );
+      }
+
+      const uniqueMap = new Map();
+      combined.forEach((s, idx) => {
+        const name = s.name || s.title || s.sessionName || `Session ${idx + 1}`;
+        const id = s._id || s.id || name;
+        const count = s.invitesCount ?? s.totalInvitees ?? (s.maxAttendees && s.maxAttendees > 0 ? s.maxAttendees : localInviteesCount);
+
+        if (!uniqueMap.has(name)) {
+          uniqueMap.set(name, {
+            ...s,
+            _id: id,
+            id: id,
+            name: name,
+            invitesCount: count,
+            totalInvitees: count,
+            maxAttendees: count,
+          });
+        }
+      });
+
+      setSessions(Array.from(uniqueMap.values()));
+    } catch (error) {
+      console.error("Failed to fetch sessions", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSessions();
+  }, [eventId]);
+
   // Form State for Add Session Modal
   const [sessionName, setSessionName] = useState("");
-  const [startTime, setStartTime] = useState("05/01/26 10:00 AM");
-  const [endTime, setEndTime] = useState("05/01/26 04:30 PM");
+  const [startTime, setStartTime] = useState(() => getFormattedCurrentDateTime(0));
+  const [endTime, setEndTime] = useState(() => getFormattedCurrentDateTime(4));
   const [accessControl, setAccessControl] = useState("No Restrictions");
   const [keepSameInvitees, setKeepSameInvitees] = useState(false);
   const [selectedSameSession, setSelectedSameSession] = useState("");
   const [uploadedFileName, setUploadedFileName] = useState("");
+
+  const handleOpenDatePicker = (field: "start" | "end") => {
+    setActiveDateField(field);
+    setIsDatePickerOpen(true);
+  };
+
+  const handleSaveDatePicker = (val: string) => {
+    if (activeDateField === "start") {
+      setStartTime(val);
+    } else {
+      setEndTime(val);
+    }
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -70,58 +146,86 @@ export default function EventSessionsPage() {
     }
   };
 
-  const handleCreateSession = (e: React.FormEvent) => {
+  const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sessionName.trim()) return;
 
-    const newSess: SessionItem = {
+    const newSessionObj = {
       id: String(Date.now()),
-      num: String(sessions.length + 1).padStart(2, "0"),
+      eventId,
+      name: sessionName,
       title: sessionName,
-      dateTime: `${startTime} to ${endTime}`,
-      totalInvitees: 0,
-      systemUsers: "01",
-      accessControl: accessControl,
+      startTime,
+      endTime,
+      accessControl,
+      speaker: "Not Assigned",
+      maxAttendees: 0,
+      invitesCount: keepSameInvitees ? 275 : 0,
+      scannedCount: 0,
     };
 
-    setSessions([...sessions, newSess]);
+    // Optimistically update state and localStorage
+    const updatedSessions = [...sessions, newSessionObj];
+    setSessions(updatedSessions);
+    try {
+      localStorage.setItem(`app_local_sessions_${eventId}`, JSON.stringify(updatedSessions));
+    } catch (e) { }
+
+    // Reset form & close modal immediately so UX is instant
     setSessionName("");
+    setUploadedFileName("");
     setIsAddModalOpen(false);
+
+    try {
+      await sessionService.createSession(eventId, {
+        name: sessionName,
+        startTime,
+        endTime,
+        accessControl,
+        speaker: "Not Assigned",
+        maxAttendees: 0,
+      });
+      fetchSessions();
+    } catch (error) {
+      console.error("Backend session creation warning:", error);
+    }
   };
 
   const filteredSessions = sessions.filter((s) =>
-    s.title.toLowerCase().includes(searchQuery.toLowerCase())
+    (s.name || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <div className="flex min-h-screen bg-white text-gray-900 font-sans">
-      {/* Sidebar Navigation */}
-      <Sidebar activeItem="event-management" />
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 bg-white">
-        {/* Top Navigation Bar */}
-        <header className="h-16 bg-white border-b border-gray-200 px-6 flex items-center justify-between sticky top-0 z-20">
-          <h1 className="text-lg font-bold text-gray-900">Event Sessions</h1>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200/80 px-3 py-1.5 rounded-full cursor-pointer transition-colors">
-              <div className="w-7 h-7 rounded-full bg-gray-400 text-white flex items-center justify-center font-semibold text-xs">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <span className="text-xs font-semibold text-gray-800">
-                {user?.fullName || "Jane Doe"}
-              </span>
-              <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+    <div className="w-full min-h-full bg-white text-gray-900 font-sans">
+      {/* Top Navigation Bar */}
+      <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
+        <h1 className="text-xl font-bold text-gray-900">Event Sessions</h1>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200/80 px-3 py-1.5 rounded-full cursor-pointer transition-colors">
+            <div className="w-7 h-7 rounded-full bg-gray-400 text-white flex items-center justify-center font-semibold text-xs">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
               </svg>
             </div>
+            <span className="text-xs font-semibold text-gray-800">
+              {user?.fullName || "Jane Doe"}
+            </span>
+            <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
           </div>
-        </header>
+        </div>
+      </header>
 
-        {/* Page Content - Directly on page background without card container */}
-        <main className="p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6 bg-white">
+      {/* Page Content - Directly on page background without card container */}
+      <div className="p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6 bg-white pb-24">
+          {/* Sub-Navigation Tabs Bar */}
+          <EventSubNav
+            eventId={eventId}
+            activeTab="sessions"
+            sessionsCount={sessions.length}
+          />
+
           {/* Controls Bar: Title, Search, Back, + Add Session */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-6 flex-1 max-w-xl">
@@ -137,7 +241,7 @@ export default function EventSessionsPage() {
                   placeholder="Search invitees"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-[#F8F9FA] border border-gray-200 rounded-md text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#FF5B22]"
+                  className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-md text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#FF5B22]"
                 />
               </div>
             </div>
@@ -171,7 +275,7 @@ export default function EventSessionsPage() {
           <div className="overflow-x-auto pt-2">
             <table className="w-full text-left text-xs whitespace-nowrap">
               <thead>
-                <tr className="border-b border-gray-100 text-gray-500 font-medium text-[11px]">
+                <tr className="border-b border-gray-200 text-gray-500 font-medium text-[11px]">
                   <th className="py-3 px-3 w-12 font-medium">#</th>
                   <th className="py-3 px-4 font-medium">Session Title</th>
                   <th className="py-3 px-4 font-medium">Date & Time</th>
@@ -180,22 +284,39 @@ export default function EventSessionsPage() {
                   <th className="py-3 px-4 font-medium">Access Control</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 text-gray-800">
-                {filteredSessions.map((sess) => (
-                  <tr key={sess.id} className="hover:bg-gray-50/80 transition-colors">
-                    <td className="py-4 px-3 font-medium text-gray-400">{sess.num}</td>
-                    <td className="py-4 px-4 font-medium text-gray-900">{sess.title}</td>
-                    <td className="py-4 px-4 text-gray-600 font-normal">{sess.dateTime}</td>
-                    <td className="py-4 px-4 font-normal text-gray-800">{sess.totalInvitees}</td>
-                    <td className="py-4 px-4 font-normal text-gray-800">{sess.systemUsers}</td>
-                    <td className="py-4 px-4 font-normal text-gray-700">{sess.accessControl}</td>
+              <tbody className="divide-y divide-gray-200 text-gray-800">
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-gray-500">
+                      Loading...
+                    </td>
                   </tr>
-                ))}
+                ) : filteredSessions.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-gray-500">
+                      No sessions found. Add a session to get started.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredSessions.map((sess, index) => (
+                    <tr key={sess._id || index} className="hover:bg-gray-50/80 transition-colors">
+                      <td className="py-4 px-3 font-medium text-gray-400">{String(index + 1).padStart(2, "0")}</td>
+                      <td className="py-4 px-4 font-medium text-gray-900">{sess.name}</td>
+                      <td className="py-4 px-4 text-gray-600 font-normal">
+                        {sess.startTime} {sess.endTime ? `to ${sess.endTime}` : ''}
+                      </td>
+                      <td className="py-4 px-4 font-normal text-gray-800">
+                        {sess.invitesCount ?? sess.totalInvitees ?? sess.maxAttendees ?? 0}
+                      </td>
+                      <td className="py-4 px-4 font-normal text-gray-800">{sess.speaker || "-"}</td>
+                      <td className="py-4 px-4 font-normal text-gray-700">{sess.accessControl || "No Restriction"}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
-        </main>
-      </div>
+        </div>
 
       {/* Add Session Modal matching Image 1 */}
       {isAddModalOpen && (
@@ -207,7 +328,7 @@ export default function EventSessionsPage() {
 
           <div className="relative bg-white rounded-md shadow-2xl max-w-lg w-full p-6 space-y-5 z-10">
             {/* Header */}
-            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-200">
               <h3 className="text-sm font-bold text-gray-900">Add Session</h3>
               <button
                 onClick={() => setIsAddModalOpen(false)}
@@ -234,7 +355,7 @@ export default function EventSessionsPage() {
                   value={sessionName}
                   onChange={(e) => setSessionName(e.target.value)}
                   required
-                  className="w-full p-2.5 bg-[#F8F9FA] border border-gray-200 rounded-md text-gray-800 focus:outline-none focus:border-[#FF5B22]"
+                  className="w-full p-2.5 bg-white border border-gray-200 rounded-md text-gray-800 focus:outline-none focus:border-[#FF5B22]"
                 />
               </div>
 
@@ -249,9 +370,16 @@ export default function EventSessionsPage() {
                       type="text"
                       value={startTime}
                       onChange={(e) => setStartTime(e.target.value)}
-                      className="w-full p-2 pr-7 border border-gray-200 rounded-md text-gray-800 text-[11px] focus:outline-none focus:border-[#FF5B22]"
+                      onClick={() => handleOpenDatePicker("start")}
+                      className="w-full p-2 pr-7 border border-gray-200 rounded-md text-gray-800 text-[11px] focus:outline-none focus:border-[#FF5B22] cursor-pointer"
                     />
-                    <svg className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg
+                      onClick={() => handleOpenDatePicker("start")}
+                      className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer hover:text-[#FF5B22]"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                   </div>
@@ -267,9 +395,16 @@ export default function EventSessionsPage() {
                       type="text"
                       value={endTime}
                       onChange={(e) => setEndTime(e.target.value)}
-                      className="w-full p-2 pr-7 border border-gray-200 rounded-md text-gray-800 text-[11px] focus:outline-none focus:border-[#FF5B22]"
+                      onClick={() => handleOpenDatePicker("end")}
+                      className="w-full p-2 pr-7 border border-gray-200 rounded-md text-gray-800 text-[11px] focus:outline-none focus:border-[#FF5B22] cursor-pointer"
                     />
-                    <svg className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg
+                      onClick={() => handleOpenDatePicker("end")}
+                      className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer hover:text-[#FF5B22]"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                   </div>
@@ -318,7 +453,7 @@ export default function EventSessionsPage() {
                 <label className="block text-xs font-semibold text-gray-800 mb-1">
                   Add Invitees List
                 </label>
-                <div className="border border-gray-200 rounded-md p-2.5 flex items-center justify-between bg-[#F8F9FA]">
+                <div className="border border-gray-200 rounded-md p-2.5 flex items-center justify-between bg-white">
                   <div className="flex items-center gap-3">
                     <label className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded cursor-pointer transition-colors">
                       Choose File
@@ -365,6 +500,14 @@ export default function EventSessionsPage() {
           </div>
         </div>
       )}
+
+      {/* DateTime Picker Modal */}
+      <DateTimePickerModal
+        isOpen={isDatePickerOpen}
+        onClose={() => setIsDatePickerOpen(false)}
+        onSave={handleSaveDatePicker}
+        initialValue={activeDateField === "start" ? startTime : endTime}
+      />
     </div>
   );
 }

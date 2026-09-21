@@ -5,9 +5,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { eventService } from "@/services/eventService";
+import { getDynamicEventStatus } from "@/utils/eventUtils";
 import { gsap } from "gsap";
-import Sidebar from "@/components/Sidebar";
-
 import StepHeader from "@/components/add-event/StepHeader";
 import Step1EventDetails from "@/components/add-event/Step1EventDetails";
 import Step2Settings from "@/components/add-event/Step2Settings";
@@ -19,6 +19,20 @@ import DateTimePickerModal from "@/components/add-event/modals/DateTimePickerMod
 import InviteesPreviewModal from "@/components/add-event/modals/InviteesPreviewModal";
 import SuccessModal from "@/components/add-event/modals/SuccessModal";
 
+function getFormattedCurrentDateTime(offsetHours: number = 0): string {
+  const date = new Date(Date.now() + offsetHours * 3600 * 1000);
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yy = String(date.getFullYear()).slice(-2);
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  const hh = String(hours).padStart(2, "0");
+  return `${dd}/${mm}/${yy} ${hh}.${minutes} ${ampm}`;
+}
+
 export default function AddEventPage() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading, logout } = useAuth();
@@ -28,10 +42,19 @@ export default function AddEventPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedTemplateSrc, setSelectedTemplateSrc] = useState("https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=500&q=80");
 
-  // Form Date State
-  const [startDate, setStartDate] = useState("15/01/26 09.00 PM");
-  const [endDate, setEndDate] = useState("15/01/26 11.30 PM");
-  const [rsvpDate, setRsvpDate] = useState("03/01/26 11.30 PM");
+  // Form Date State default to exact current date & time
+  const [startDate, setStartDate] = useState(() => getFormattedCurrentDateTime(0));
+  const [endDate, setEndDate] = useState(() => getFormattedCurrentDateTime(0));
+  const [rsvpDate, setRsvpDate] = useState(() => getFormattedCurrentDateTime(0));
+
+  const [eventDetails, setEventDetails] = useState({
+    title: "",
+    description: "",
+    category: "Corporate",
+    subcategory: "",
+    contactNumber: "",
+    venue: "Grand Ballroom, Tech City",
+  });
 
   // Modal Control States
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
@@ -60,8 +83,11 @@ export default function AddEventPage() {
     }
   }, [isLoading, isAuthenticated, router]);
 
-  const handleOpenDatePicker = (field: "start" | "end" | "rsvp") => {
+  const [datePickerCallback, setDatePickerCallback] = useState<((val: string) => void) | null>(null);
+
+  const handleOpenDatePicker = (field: "start" | "end" | "rsvp", callback?: (val: string) => void) => {
     setActiveDateField(field);
+    setDatePickerCallback(() => (callback ? callback : null));
     setIsDatePickerModalOpen(true);
   };
 
@@ -69,11 +95,81 @@ export default function AddEventPage() {
     if (activeDateField === "start") setStartDate(val);
     else if (activeDateField === "end") setEndDate(val);
     else if (activeDateField === "rsvp") setRsvpDate(val);
+
+    if (datePickerCallback) {
+      datePickerCallback(val);
+      setDatePickerCallback(null);
+    }
   };
 
-  const handleOpenInviteesPreview = (sessionName: string) => {
+  const [activePreviewInvitees, setActivePreviewInvitees] = useState<any[]>([]);
+
+  const handleOpenInviteesPreview = (sessionName: string, inviteesList?: any[]) => {
     setActivePreviewSession(sessionName);
+    if (inviteesList && inviteesList.length > 0) {
+      setActivePreviewInvitees(inviteesList);
+    } else {
+      const cached = localStorage.getItem("app_local_invitees_draft") || localStorage.getItem("app_local_invitees_1");
+      if (cached) {
+        try {
+          setActivePreviewInvitees(JSON.parse(cached));
+        } catch (e) {}
+      }
+    }
     setIsInviteesPreviewOpen(true);
+  };
+
+  const handleFinishEvent = async () => {
+    const finalTitle = eventDetails.title.trim() || "New Tech Event 2026";
+    const finalVenue = eventDetails.venue.trim() || "Grand Ballroom, Tech City";
+
+    let createdId = "evt_" + Math.random().toString(36).substring(2, 9);
+    try {
+      const res = await eventService.createEvent({
+        title: finalTitle,
+        description: eventDetails.description || finalTitle,
+        startDate: startDate,
+        endDate: endDate,
+        rsvpDeadline: rsvpDate,
+        location: finalVenue,
+        isPublic: true,
+      });
+      if (res?.data?.id || (res?.data as any)?._id || (res?.data as any)?.eventId) {
+        createdId = res.data?.id || (res.data as any)?._id || (res.data as any)?.eventId;
+      }
+    } catch (e: any) {
+      console.warn("Backend event creation network error, saving to local cache:", e);
+    }
+
+    // Always cache created event in localStorage so it displays instantly
+    const newEventItem = {
+      id: createdId,
+      eventId: `#${String(createdId).slice(-4).toUpperCase()}`,
+      eventName: finalTitle,
+      title: finalTitle,
+      organizer: user?.fullName || "Super Admin",
+      createdOn: new Date().toLocaleDateString(),
+      category: eventDetails.category || "Corporate",
+      startDate: startDate,
+      endDate: endDate,
+      status: getDynamicEventStatus(startDate, endDate, "Upcoming"),
+      venue: finalVenue,
+    };
+
+    try {
+      const existing = JSON.parse(localStorage.getItem("app_local_events") || "[]");
+      localStorage.setItem("app_local_events", JSON.stringify([newEventItem, ...existing]));
+
+      const inviteesToSave = activePreviewInvitees.length > 0 ? activePreviewInvitees : JSON.parse(localStorage.getItem("app_local_invitees_draft") || "[]");
+      if (inviteesToSave.length > 0) {
+        localStorage.setItem(`app_local_invitees_${createdId}`, JSON.stringify(inviteesToSave));
+        localStorage.setItem(`app_local_invitees_1`, JSON.stringify(inviteesToSave));
+      }
+    } catch (err) {
+      console.error("Failed to write to localStorage:", err);
+    }
+
+    router.push(`/events/${createdId}`);
   };
 
   if (isLoading) {
@@ -91,15 +187,12 @@ export default function AddEventPage() {
   }
 
   return (
-    <div className="min-h-screen flex bg-[#F4F5F8] font-sans text-gray-800">
-      {/* ── Left Sidebar ── */}
-      <Sidebar activeItem="add-event" />
-
+    <div className="w-full min-h-full bg-[#F4F5F8] font-sans text-gray-800">
       {/* ── Main Work Area ── */}
-      <div className="flex-1 flex flex-col min-h-screen overflow-x-hidden">
+      <div className="flex-1 flex flex-col min-h-full overflow-x-hidden">
         {/* Top Navbar Header */}
-        <header className="h-16 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between shrink-0">
-          <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">Add Event</h1>
+        <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between shrink-0">
+          <h1 className="text-xl font-bold text-gray-900 tracking-tight">Add Event</h1>
 
           {/* User Profile */}
           <div className="relative">
@@ -148,6 +241,8 @@ export default function AddEventPage() {
                   startDate={startDate}
                   endDate={endDate}
                   rsvpDate={rsvpDate}
+                  initialData={eventDetails}
+                  onDataChange={(data) => setEventDetails((prev) => ({ ...prev, ...data }))}
                 />
               )}
 
@@ -160,10 +255,12 @@ export default function AddEventPage() {
 
               {currentStep === 3 && (
                 <Step3Sessions
-                  onFinish={() => setIsSuccessModalOpen(true)}
+                  onFinish={handleFinishEvent}
                   onBack={() => setCurrentStep(2)}
                   onOpenInviteesPreview={handleOpenInviteesPreview}
                   onOpenDatePicker={handleOpenDatePicker}
+                  startDate={startDate}
+                  endDate={endDate}
                 />
               )}
             </div>
@@ -196,6 +293,14 @@ export default function AddEventPage() {
         isOpen={isInviteesPreviewOpen}
         onClose={() => setIsInviteesPreviewOpen(false)}
         sessionName={activePreviewSession}
+        inviteesList={activePreviewInvitees}
+        onSave={(updatedList) => {
+          setActivePreviewInvitees(updatedList);
+          try {
+            localStorage.setItem("app_local_invitees_draft", JSON.stringify(updatedList));
+            localStorage.setItem("app_local_invitees_1", JSON.stringify(updatedList));
+          } catch (e) {}
+        }}
       />
 
       <SuccessModal

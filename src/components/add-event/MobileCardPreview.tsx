@@ -27,7 +27,7 @@ export default function MobileCardPreview({
   }, [selectedTemplateSrc]);
 
   return (
-    <div className="w-full bg-[#F8F9FA] border-l border-gray-200 p-6 flex flex-col items-center justify-between min-h-full font-[family-name:var(--font-space-grotesk)]">
+    <div className="w-full bg-white border-l border-gray-200 p-6 flex flex-col items-center justify-between min-h-full font-[family-name:var(--font-space-grotesk)]">
       {/* Top Controls Header */}
       <div className="w-full flex items-center justify-between mb-4">
         <span className="text-xs font-semibold px-3 py-1 bg-white border border-gray-200 rounded-md text-gray-700 shadow-2xs">
