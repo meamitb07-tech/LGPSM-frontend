@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { userService } from "@/services/userService";
+import UserNavDropdown from "@/components/common/UserNavDropdown";
 import { useAuth } from "@/context/AuthContext";
 
 interface OrganizerRow {
@@ -21,20 +23,44 @@ export default function AllOrganizersPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
 
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("app_local_organizers");
-      if (stored) {
-        setOrganizers(JSON.parse(stored));
-      } else {
-        const defaultList: OrganizerRow[] = [
-          { id: "org_1", name: "Rohan Verma", email: "rohan.verma@example.com", phone: "+919876543210", status: "Active" },
-          { id: "org_2", name: "Ananya Sharma", email: "ananya.s@example.com", phone: "+919812345678", status: "Active" },
-        ];
-        setOrganizers(defaultList);
-        localStorage.setItem("app_local_organizers", JSON.stringify(defaultList));
-      }
-    } catch (e) { }
+    async function loadOrganizers() {
+      setLoading(true);
+      let list: OrganizerRow[] = [];
+
+      try {
+        const stored = localStorage.getItem("app_local_organizers");
+        if (stored) {
+          list = JSON.parse(stored);
+        }
+      } catch (e) { }
+
+      try {
+        const res = await userService.getUsers();
+        if (res?.success && Array.isArray(res.data)) {
+          const apiOrgs = res.data.map((u: any, idx: number) => ({
+            id: u._id || u.id || `org_${idx}`,
+            name: u.fullName || u.name || "Event Organizer",
+            email: u.email || "--",
+            phone: u.phone || "+91 9876543210",
+            status: (u.status || "Active") as any,
+          }));
+
+          apiOrgs.forEach((ao) => {
+            if (!list.some((o) => o.id === ao.id || o.email === ao.email)) {
+              list.push(ao);
+            }
+          });
+        }
+      } catch (e) { }
+
+      setOrganizers(list);
+      setLoading(false);
+    }
+
+    loadOrganizers();
   }, []);
 
   const toggleSelectAll = () => {
@@ -65,19 +91,7 @@ export default function AllOrganizersPage() {
         {/* Header */}
         <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
           <h1 className="text-xl font-bold text-gray-900">Event Organizer</h1>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200/80 px-3 py-1.5 rounded-full cursor-pointer transition-colors">
-              <div className="w-7 h-7 rounded-full bg-gray-400 text-white flex items-center justify-center font-semibold text-xs">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <span className="text-xs font-semibold text-gray-800">{user?.fullName || user?.email || "Super Admin"}</span>
-              <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </div>
+          <UserNavDropdown />
         </header>
 
         {/* Page Content */}

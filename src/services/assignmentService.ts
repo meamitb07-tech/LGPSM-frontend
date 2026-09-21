@@ -12,7 +12,8 @@ export interface AssignmentData {
 }
 
 export interface CreateAssignmentPayload {
-  systemUserId: string;
+  userId?: string;
+  systemUserId?: string;
   sessionIds: string[];
 }
 
@@ -25,9 +26,10 @@ export const assignmentService = {
     eventId: string,
     payload: CreateAssignmentPayload
   ): Promise<ApiResponse<AssignmentData>> {
+    const userId = payload.userId || payload.systemUserId || "";
     return apiClient<AssignmentData>(`/api/v1/events/${eventId}/assignments`, {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ userId, sessionIds: payload.sessionIds }),
     }, true);
   },
 

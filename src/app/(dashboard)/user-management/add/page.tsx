@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { userService } from "@/services/userService";
+import UserNavDropdown from "@/components/common/UserNavDropdown";
 import { useAuth } from "@/context/AuthContext";
 
 export default function AddUserPage() {
@@ -62,19 +63,7 @@ export default function AddUserPage() {
         {/* Header */}
         <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
           <h1 className="text-xl font-bold text-gray-900">Add User</h1>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200/80 px-3 py-1.5 rounded-full cursor-pointer transition-colors">
-              <div className="w-7 h-7 rounded-full bg-gray-400 text-white flex items-center justify-center font-semibold text-xs">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <span className="text-xs font-semibold text-gray-800">{user?.fullName || user?.email || "Super Admin"}</span>
-              <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </div>
+          <UserNavDropdown />
         </header>
 
         {/* Page Content */}

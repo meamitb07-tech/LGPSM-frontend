@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { SAMPLE_ORGANIZER_RECORDS, SAMPLE_EVENT_RECORDS } from "@/data/earningsData";
 import { EarningsRecord } from "@/types/earnings";
 import EarningsOverviewCard from "@/components/earnings/EarningsOverviewCard";
 import EarningsStatsRow from "@/components/earnings/EarningsStatsRow";
 import EarningsTable from "@/components/earnings/EarningsTable";
+import UserNavDropdown from "@/components/common/UserNavDropdown";
+import { eventService } from "@/services/eventService";
+import { userService } from "@/services/userService";
 
 export default function EarningsPage() {
   const { user } = useAuth();
@@ -19,8 +21,77 @@ export default function EarningsPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isSavedNotice, setIsSavedNotice] = useState(false);
 
-  const [organizerRecords, setOrganizerRecords] = useState<EarningsRecord[]>(SAMPLE_ORGANIZER_RECORDS);
-  const [eventRecords, setEventRecords] = useState<EarningsRecord[]>(SAMPLE_EVENT_RECORDS);
+  const [organizerRecords, setOrganizerRecords] = useState<EarningsRecord[]>([]);
+  const [eventRecords, setEventRecords] = useState<EarningsRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadEarnings() {
+      setLoading(true);
+      let events: any[] = [];
+      try {
+        const res = await eventService.getEvents();
+        if (res?.success && Array.isArray(res.data)) {
+          events = res.data;
+        }
+      } catch (e) {}
+
+      try {
+        const local = localStorage.getItem("app_local_events");
+        if (local) {
+          const parsed = JSON.parse(local);
+          parsed.forEach((ev: any) => {
+            const id = ev.id || ev._id;
+            if (!events.some((e) => (e._id || e.id) === id)) {
+              events.push(ev);
+            }
+          });
+        }
+      } catch (e) {}
+
+      const mappedEventRecs: EarningsRecord[] = events.map((ev, idx) => {
+        const evId = ev._id || ev.id || `evt_${idx}`;
+        let inviteesCount = 0;
+        try {
+          const invData = localStorage.getItem(`app_local_invitees_${evId}`);
+          if (invData) {
+            const parsedInv = JSON.parse(invData);
+            if (Array.isArray(parsedInv)) inviteesCount = parsedInv.length;
+          }
+        } catch (e) {}
+        if (inviteesCount === 0) inviteesCount = 250;
+
+        const currentRate = rate;
+        return {
+          id: `rec_evt_${idx + 1}`,
+          organizer: ev.organizer || ev.organizerId?.fullName || "Admin",
+          eventName: ev.title || ev.eventName || "Untitled Event",
+          dateOfPayment: ev.createdAt ? new Date(ev.createdAt).toLocaleDateString() : "20/09/2026",
+          invites: inviteesCount,
+          rate: currentRate,
+          amount: inviteesCount * currentRate,
+        };
+      });
+
+      // Group by organizer for organizerRecords
+      const orgMap = new Map<string, EarningsRecord>();
+      mappedEventRecs.forEach((r) => {
+        if (orgMap.has(r.organizer)) {
+          const existing = orgMap.get(r.organizer)!;
+          existing.invites += r.invites;
+          existing.amount += r.amount;
+        } else {
+          orgMap.set(r.organizer, { ...r, id: `rec_org_${orgMap.size + 1}` });
+        }
+      });
+
+      setEventRecords(mappedEventRecs);
+      setOrganizerRecords(Array.from(orgMap.values()));
+      setLoading(false);
+    }
+
+    loadEarnings();
+  }, [rate]);
 
   const currentRecords = activeTab === "organizer" ? organizerRecords : eventRecords;
 
@@ -92,14 +163,7 @@ export default function EarningsPage() {
     <div className="w-full min-h-full bg-white">
       <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
         <h1 className="text-xl font-bold text-gray-900">Earnings</h1>
-        <div className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-full cursor-pointer">
-          <div className="w-7 h-7 rounded-full bg-gray-400 text-white flex items-center justify-center font-semibold text-xs">
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-            </svg>
-          </div>
-          <span className="text-xs font-semibold text-gray-800">{user?.fullName || user?.email || "Account Name"}</span>
-        </div>
+        <UserNavDropdown />
       </header>
 
       <div className="p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6 bg-white pb-24">

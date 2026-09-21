@@ -35,7 +35,7 @@ export default function InviteesPreviewModal({
   isOpen,
   onClose,
   onSave,
-  inviteesList = DEFAULT_INVITEES,
+  inviteesList = [],
   sessionName = "Session 1 - Entry Session",
 }: InviteesPreviewModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);

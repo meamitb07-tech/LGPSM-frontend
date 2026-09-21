@@ -85,8 +85,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const current = user || tokenStorage.getUser() || {
       _id: "usr_admin",
-      fullName: "Alex Morgan",
-      email: "alex.morgan@example.com",
+      fullName: "Admin",
+      email: "admin@lgpsm.com",
     };
 
     const updatedUser = {

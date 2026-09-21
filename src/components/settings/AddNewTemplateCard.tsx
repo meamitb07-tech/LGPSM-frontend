@@ -28,6 +28,15 @@ export default function AddNewTemplateCard({
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedSubcategory, setSelectedSubcategory] = useState("");
   const [isPublished, setIsPublished] = useState(false);
+  const [templateFile, setTemplateFile] = useState<{ name: string; url: string } | null>(null);
+  const templateInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = (file: File) => {
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setTemplateFile({ name: file.name, url });
+    }
+  };
 
   const categoryOptions = categories.map((cat) => ({
     value: cat.id,
@@ -123,12 +132,62 @@ export default function AddNewTemplateCard({
           <label className="block text-xs font-medium text-gray-700 mb-1">
             Upload Card Template
           </label>
-          <div className="w-full max-w-md border-2 border-dashed border-gray-200 rounded-md p-6 text-center hover:border-[#FF5B22] transition-colors bg-gray-50/30 cursor-pointer">
-            <p className="text-xs text-gray-500">
-              Drag and drop a image here or{" "}
-              <span className="text-[#FF5B22] font-semibold hover:underline">click to open file</span>
-            </p>
-          </div>
+          <input
+            ref={templateInputRef}
+            type="file"
+            accept="image/*,.pdf"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleFileSelect(file);
+            }}
+          />
+
+          {templateFile ? (
+            <div className="w-full max-w-md p-3 border border-emerald-300 rounded-md bg-emerald-50/40 flex items-center justify-between">
+              <div className="flex items-center gap-3 overflow-hidden">
+                {templateFile.url.startsWith("blob:") || templateFile.url.startsWith("data:") ? (
+                  <div className="w-12 h-16 rounded overflow-hidden relative shrink-0 border border-emerald-300">
+                    <img src={templateFile.url} alt="Template preview" className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <svg className="w-6 h-6 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                )}
+                <span className="text-xs font-semibold text-emerald-900 truncate max-w-[200px]">
+                  {templateFile.name}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTemplateFile(null)}
+                className="p-1 text-gray-400 hover:text-red-500 transition-colors cursor-pointer shrink-0"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ) : (
+            <div
+              onClick={() => templateInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                  handleFileSelect(e.dataTransfer.files[0]);
+                }
+              }}
+              className="w-full max-w-md border-2 border-dashed border-gray-200 rounded-md p-6 text-center hover:border-[#FF5B22] transition-colors bg-gray-50/30 cursor-pointer select-none"
+            >
+              <p className="text-xs text-gray-500">
+                Drag and drop an image here or{" "}
+                <span className="text-[#FF5B22] font-semibold hover:underline">click to open file</span>
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Row 3: Publish toggle */}

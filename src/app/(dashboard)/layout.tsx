@@ -39,9 +39,9 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen bg-[#F8F9FA] overflow-hidden font-sans">
+    <div className="flex flex-col md:flex-row h-screen bg-[#F8F9FA] overflow-hidden font-sans">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto min-w-0 flex flex-col animate-page">
+      <main className="flex-1 overflow-y-auto min-w-0 flex flex-col">
         {children}
       </main>
     </div>

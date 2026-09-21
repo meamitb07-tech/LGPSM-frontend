@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import AddInviteesModal from "@/components/add-event/modals/AddInviteesModal";
 import InviteesPreviewModal from "@/components/add-event/modals/InviteesPreviewModal";
@@ -10,9 +10,11 @@ import { eventService } from "@/services/eventService";
 import { sessionService } from "@/services/sessionService";
 import { inviteeService } from "@/services/inviteeService";
 import EventSubNav from "@/components/EventSubNav";
+import UserNavDropdown from "@/components/common/UserNavDropdown";
 
 export default function InviteesManagementPage() {
   const params = useParams();
+  const router = useRouter();
   const eventId = (params?.id as string) || "1";
   const { user } = useAuth();
 
@@ -20,7 +22,7 @@ export default function InviteesManagementPage() {
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedEventFilter, setSelectedEventFilter] = useState("All Events");
+  const [selectedEventFilter, setSelectedEventFilter] = useState(eventId);
   const [selectedSessionFilter, setSelectedSessionFilter] = useState("All Sessions");
 
   const [eventsOptions, setEventsOptions] = useState<{ id: string; title: string }[]>([]);
@@ -40,7 +42,7 @@ export default function InviteesManagementPage() {
         if (res?.success && Array.isArray(rawList)) {
           rawList.forEach((ev: any) => {
             const id = ev._id || ev.id;
-            if (id) combined.push({ id, title: ev.title || "Untitled Event" });
+            if (id) combined.push({ id, title: ev.title || ev.eventName || "Untitled Event" });
           });
         }
       } catch (err) { }
@@ -58,9 +60,16 @@ export default function InviteesManagementPage() {
       } catch (e) { }
 
       if (combined.length === 0) {
-        combined.push({ id: eventId, title: "Product Launch Event 2026" });
+        combined.push({ id: eventId, title: "Test Event" });
       }
       setEventsOptions(combined);
+
+      const matched = combined.find((e) => e.id === eventId);
+      if (matched) {
+        setSelectedEventFilter(matched.id);
+      } else if (combined.length > 0) {
+        setSelectedEventFilter(combined[0].id);
+      }
     }
     loadEvents();
   }, [eventId]);
@@ -68,26 +77,34 @@ export default function InviteesManagementPage() {
   // Load sessions list for filter dropdown
   useEffect(() => {
     async function loadSessions() {
+      let mapped: { id: string; name: string }[] = [];
       try {
         const res = await sessionService.getSessions(eventId);
         if (res?.success && Array.isArray(res.data) && res.data.length > 0) {
-          const mapped = res.data.map((s: any, idx: number) => ({
+          mapped = res.data.map((s: any, idx: number) => ({
             id: s._id || s.id || `sess_${idx}`,
-            name: s.name || `Session ${idx + 1}`,
+            name: s.name || s.title || `Session ${idx + 1}`,
           }));
-          setSessionsOptions(mapped);
-        } else {
-          setSessionsOptions([
-            { id: "entry", name: "Session 1 - Entry Session" },
-            { id: "lunch", name: "Session 2 - Lunch Session" },
-          ]);
         }
-      } catch {
-        setSessionsOptions([
-          { id: "entry", name: "Session 1 - Entry Session" },
-          { id: "lunch", name: "Session 2 - Lunch Session" },
-        ]);
-      }
+      } catch {}
+
+      try {
+        const cached = localStorage.getItem(`app_local_sessions_${eventId}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((s: any, idx: number) => {
+              const name = s.name || s.title || `Session ${idx + 1}`;
+              const id = s._id || s.id || `sess_${idx}`;
+              if (!mapped.some((m) => m.id === id || m.name === name)) {
+                mapped.push({ id, name });
+              }
+            });
+          }
+        }
+      } catch (e) {}
+
+      setSessionsOptions(mapped);
     }
     loadSessions();
   }, [eventId]);
@@ -97,14 +114,28 @@ export default function InviteesManagementPage() {
       setLoading(true);
       const res = await inviteeService.getInvitees(eventId);
       let list: any[] = [];
-      if (res.success && res.data && res.data.length > 0) {
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
         list = res.data;
       } else {
-        const cached = localStorage.getItem(`app_local_invitees_${eventId}`);
-        if (cached) {
-          try {
-            list = JSON.parse(cached);
-          } catch (e) { }
+        const keysToTry = [
+          `app_local_invitees_${eventId}`,
+          `app_local_invitees_${selectedEventFilter}`,
+          "app_local_invitees_1",
+          "app_local_invitees_draft",
+          "app_local_invitees"
+        ];
+        for (const k of keysToTry) {
+          if (!k) continue;
+          const cached = localStorage.getItem(k);
+          if (cached) {
+            try {
+              const parsed = JSON.parse(cached);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                list = parsed;
+                break;
+              }
+            } catch (e) { }
+          }
         }
       }
       setInvitees(list);
@@ -129,7 +160,7 @@ export default function InviteesManagementPage() {
     if (eventId) {
       fetchInvitees();
     }
-  }, [eventId]);
+  }, [eventId, selectedEventFilter]);
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
@@ -161,21 +192,7 @@ export default function InviteesManagementPage() {
       {/* Top Navigation Bar */}
       <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
         <h1 className="text-xl font-bold text-gray-900">Add Invitees</h1>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200/80 px-3 py-1.5 rounded-full cursor-pointer transition-colors">
-            <div className="w-7 h-7 rounded-full bg-gray-400 text-white flex items-center justify-center font-semibold text-xs">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <span className="text-xs font-semibold text-gray-800">
-              {user?.fullName || "Super Admin"}
-            </span>
-            <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
-        </div>
+        <UserNavDropdown />
       </header>
 
       {/* Page Content - Directly on pure white page background */}
@@ -222,10 +239,15 @@ export default function InviteesManagementPage() {
             <div className="flex flex-wrap items-center gap-3 shrink-0">
               <select
                 value={selectedEventFilter}
-                onChange={(e) => setSelectedEventFilter(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedEventFilter(val);
+                  if (val && val !== "All Events" && val !== eventId) {
+                    router.push(`/events/${val}/invitees`);
+                  }
+                }}
                 className="px-3 py-2 bg-white border border-gray-200 rounded-md text-xs text-gray-700 font-medium focus:outline-none focus:border-[#FF5B22] cursor-pointer"
               >
-                <option value="All Events">Select Event</option>
                 {eventsOptions.map((ev) => (
                   <option key={ev.id} value={ev.id}>
                     {ev.title}
@@ -441,11 +463,15 @@ export default function InviteesManagementPage() {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         eventId={eventId}
-        onUploadSuccess={(parsedList) => {
+        onUploadSuccess={(parsedList, uploadEventId) => {
+          const targetEvt = uploadEventId || eventId;
           if (parsedList && parsedList.length > 0) {
             setInvitees(parsedList);
           } else {
             fetchInvitees();
+          }
+          if (targetEvt && targetEvt !== eventId) {
+            router.push(`/events/${targetEvt}/invitees`);
           }
           setIsPreviewModalOpen(true);
         }}
@@ -465,6 +491,7 @@ export default function InviteesManagementPage() {
           const formatted = updatedList.map((u) => ({
             id: u.id,
             _id: u.id,
+            eventId: selectedEventFilter || eventId,
             name: u.name,
             email: u.email,
             mobile: u.phone,
@@ -477,6 +504,7 @@ export default function InviteesManagementPage() {
           }));
           setInvitees(formatted);
           try {
+            localStorage.setItem(`app_local_invitees_${selectedEventFilter || eventId}`, JSON.stringify(formatted));
             localStorage.setItem(`app_local_invitees_${eventId}`, JSON.stringify(formatted));
             localStorage.setItem(`app_local_invitees_1`, JSON.stringify(formatted));
           } catch (e) { }

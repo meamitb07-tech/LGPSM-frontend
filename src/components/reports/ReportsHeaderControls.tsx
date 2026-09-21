@@ -11,6 +11,8 @@ interface ReportsHeaderControlsProps {
   selectedEvent: string;
   setSelectedEvent: (val: string) => void;
   onDownloadReport: () => void;
+  organizerOptions?: { value: string; label: string }[];
+  eventOptions?: { value: string; label: string }[];
 }
 
 export default function ReportsHeaderControls({
@@ -21,19 +23,13 @@ export default function ReportsHeaderControls({
   selectedEvent,
   setSelectedEvent,
   onDownloadReport,
+  organizerOptions = [
+    { value: "", label: "All Organizers" },
+  ],
+  eventOptions = [
+    { value: "", label: "Select Event" },
+  ],
 }: ReportsHeaderControlsProps) {
-  const organizerOptions = [
-    { value: "", label: "Organizer name here" },
-    { value: "jk", label: "JK Event Management" },
-    { value: "navkrit", label: "Navkrit Brand Solution" },
-    { value: "anjali", label: "Anjali Groups & Sons" },
-  ];
-
-  const eventOptions = [
-    { value: "Product Launch Event 2026", label: "Product Launch Event 2026" },
-    { value: "Nivita Birthday", label: "Nivita Birthday" },
-    { value: "Sumanta Marriage Anniversary", label: "Sumanta Marriage Anniversary" },
-  ];
 
   return (
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

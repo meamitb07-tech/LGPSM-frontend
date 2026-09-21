@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { defaultEventSettings } from "@/data/settingsData";
 import { EventSettingsOptions } from "@/types/settings";
 import { useAuth } from "@/context/AuthContext";
+import UserNavDropdown from "@/components/common/UserNavDropdown";
 
 export default function EventSettingsPage() {
   const { user } = useAuth();
@@ -35,14 +36,7 @@ export default function EventSettingsPage() {
       {/* Header */}
       <header className="h-16 bg-white border-b border-gray-200 px-6 flex items-center justify-between shrink-0 sticky top-0 z-20">
         <h1 className="text-base font-bold text-gray-800">Event Settings</h1>
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600">
-            <svg className="w-4 h-4 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-            </svg>
-          </div>
-          <span className="text-xs font-semibold text-gray-700">{user?.fullName || user?.email || "Account Name"}</span>
-        </div>
+        <UserNavDropdown />
       </header>
 
       {/* Content */}

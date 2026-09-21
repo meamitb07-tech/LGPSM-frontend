@@ -5,7 +5,7 @@ import React, { useState } from "react";
 interface ChangePasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onUpdate: (oldPass: string, newPass: string) => void;
+  onUpdate: (oldPass: string, newPass: string) => Promise<boolean | void>;
 }
 
 export default function ChangePasswordModal({
@@ -17,21 +17,35 @@ export default function ChangePasswordModal({
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (newPassword.length < 6) {
+      setError("New password must be at least 6 characters.");
+      return;
+    }
     if (newPassword !== confirmPassword) {
       setError("New password and confirm password do not match.");
       return;
     }
     setError("");
-    onUpdate(oldPassword, newPassword);
-    setOldPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    onClose();
+    setIsSubmitting(true);
+    try {
+      const success = await onUpdate(oldPassword, newPassword);
+      if (success !== false) {
+        setOldPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        onClose();
+      }
+    } catch (err: any) {
+      setError(err?.message || "Failed to update password.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -96,15 +110,17 @@ export default function ChangePasswordModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              disabled={isSubmitting}
+              className="px-5 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-6 py-2 text-xs font-medium text-white bg-[#FF5B22] rounded-md hover:bg-[#e04f1d] transition-colors shadow-xs"
+              disabled={isSubmitting}
+              className="px-6 py-2 text-xs font-medium text-white bg-[#FF5B22] rounded-md hover:bg-[#e04f1d] transition-colors shadow-xs cursor-pointer disabled:opacity-50"
             >
-              Update
+              {isSubmitting ? "Updating..." : "Update"}
             </button>
           </div>
         </form>

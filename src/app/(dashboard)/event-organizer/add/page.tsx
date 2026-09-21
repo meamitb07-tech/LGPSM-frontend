@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { userService } from '@/services/userService';
+import UserNavDropdown from "@/components/common/UserNavDropdown";
 
 export default function AddEventOrganizerPage() {
   const router = useRouter();
@@ -18,6 +19,29 @@ export default function AddEventOrganizerPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  const [logoFile, setLogoFile] = useState<{ name: string; url: string } | null>(null);
+  const logoInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleLogoSelect = (file: File) => {
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setLogoFile({ name: file.name, url });
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleLogoSelect(e.dataTransfer.files[0]);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -29,6 +53,7 @@ export default function AddEventOrganizerPage() {
       email: formData.email,
       phone: formData.phone,
       status: "Active" as const,
+      logoUrl: logoFile?.url || "",
     };
 
     try {
@@ -61,19 +86,7 @@ export default function AddEventOrganizerPage() {
         {/* Header */}
         <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
           <h1 className="text-xl font-bold text-gray-900">Add Event Organizer</h1>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200/80 px-3 py-1.5 rounded-full cursor-pointer transition-colors">
-              <div className="w-7 h-7 rounded-full bg-gray-400 text-white flex items-center justify-center font-semibold text-xs">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <span className="text-xs font-semibold text-gray-800">{user?.fullName || user?.email || "Super Admin"}</span>
-              <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </div>
+          <UserNavDropdown />
         </header>
 
         {/* Form Container */}
@@ -147,11 +160,55 @@ export default function AddEventOrganizerPage() {
               {/* Organizer Logo Box */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-gray-800">Organizer Logo</label>
-                <div className="border border-dashed border-gray-300 rounded-md p-6 bg-white hover:bg-gray-50 flex flex-col items-center justify-center text-center cursor-pointer transition-colors min-h-[110px]">
-                  <span className="text-[11px] text-gray-400 max-w-[200px] leading-tight">
-                    Drag and drop a photo here or click to open file
-                  </span>
-                </div>
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/*,.pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleLogoSelect(file);
+                  }}
+                />
+
+                {logoFile ? (
+                  <div className="p-3 border border-emerald-200 rounded-md bg-emerald-50/50 flex items-center justify-between min-h-[110px]">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      {logoFile.url.startsWith("blob:") || logoFile.url.startsWith("data:") ? (
+                        <div className="w-12 h-12 rounded-lg overflow-hidden relative shrink-0 border border-emerald-300">
+                          <img src={logoFile.url} alt="Logo preview" className="w-full h-full object-cover" />
+                        </div>
+                      ) : (
+                        <svg className="w-6 h-6 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      )}
+                      <span className="text-xs font-semibold text-emerald-900 truncate max-w-[150px]">
+                        {logoFile.name}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setLogoFile(null)}
+                      className="p-1 text-gray-400 hover:text-red-500 transition-colors cursor-pointer shrink-0"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => logoInputRef.current?.click()}
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                    className="border border-dashed border-gray-300 hover:border-[#FF5B22] rounded-md p-6 bg-white hover:bg-gray-50 flex flex-col items-center justify-center text-center cursor-pointer transition-colors min-h-[110px] select-none"
+                  >
+                    <span className="text-[11px] text-gray-400 max-w-[200px] leading-tight">
+                      Drag and drop a photo here or <span className="text-[#FF5B22] font-semibold underline">click to open file</span>
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 

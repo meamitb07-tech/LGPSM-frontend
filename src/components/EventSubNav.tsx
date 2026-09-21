@@ -21,9 +21,9 @@ export default function EventSubNav({
   inviteesCount: propInviteesCount,
   assignmentsCount: propAssignmentsCount,
 }: EventSubNavProps) {
-  const [sessionsCount, setSessionsCount] = useState<number>(propSessionsCount ?? 3);
+  const [sessionsCount, setSessionsCount] = useState<number>(propSessionsCount ?? 0);
   const [inviteesCount, setInviteesCount] = useState<number>(propInviteesCount ?? 0);
-  const [assignmentsCount, setAssignmentsCount] = useState<number>(propAssignmentsCount ?? 7);
+  const [assignmentsCount, setAssignmentsCount] = useState<number>(propAssignmentsCount ?? 0);
 
   useEffect(() => {
     if (propSessionsCount !== undefined) setSessionsCount(propSessionsCount);
@@ -45,7 +45,7 @@ export default function EventSubNav({
 
         let localSess: any[] = [];
         try {
-          const keys = [`app_local_sessions_${eventId}`, "app_local_sessions_1", "app_local_sessions"];
+          const keys = [`app_local_sessions_${eventId}`];
           keys.forEach((k) => {
             const cached = localStorage.getItem(k);
             if (cached) {
@@ -56,13 +56,6 @@ export default function EventSubNav({
         } catch {}
 
         const combinedSess = [...sessList, ...localSess];
-        if (combinedSess.length === 0) {
-          combinedSess.push(
-            { id: "morning", name: "Morning" },
-            { id: "entry", name: "Session 1 - Entry Session" },
-            { id: "lunch", name: "Session 2 - Lunch Session" }
-          );
-        }
         const sessMap = new Map();
         combinedSess.forEach((s, idx) => {
           const name = s.name || s.title || `Session ${idx + 1}`;
@@ -81,7 +74,7 @@ export default function EventSubNav({
 
         let localInv: any[] = [];
         try {
-          const keys = [`app_local_invitees_${eventId}`, "app_local_invitees_1", "app_local_invitees"];
+          const keys = [`app_local_invitees_${eventId}`];
           keys.forEach((k) => {
             const cached = localStorage.getItem(k);
             if (cached) {
@@ -110,7 +103,7 @@ export default function EventSubNav({
 
         let localAssign: any[] = [];
         try {
-          const keys = [`app_local_assignments_${eventId}`, "app_local_system_users", "app_local_users"];
+          const keys = [`app_local_assignments_${eventId}`];
           keys.forEach((k) => {
             const cached = localStorage.getItem(k);
             if (cached) {
@@ -121,11 +114,7 @@ export default function EventSubNav({
         } catch {}
 
         const combinedAssign = [...assignList, ...localAssign];
-        if (combinedAssign.length === 0) {
-          setAssignmentsCount(7);
-        } else {
-          setAssignmentsCount(combinedAssign.length);
-        }
+        setAssignmentsCount(combinedAssign.length);
       }
     }
 

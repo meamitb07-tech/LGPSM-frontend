@@ -5,16 +5,22 @@ import { useAuth } from "@/context/AuthContext";
 import ChangePasswordModal from "@/components/settings/modals/ChangePasswordModal";
 import AvatarSection from "@/components/settings/AvatarSection";
 
+import { authService } from "@/services/authService";
+import { tokenStorage } from "@/services/tokenStorage";
+
+import UserNavDropdown from "@/components/common/UserNavDropdown";
+
 export default function AccountSettingsPage() {
   const { user, updateProfile } = useAuth();
-  const [fullName, setFullName] = useState(user?.fullName || "Alex Morgan");
-  const [email, setEmail] = useState(user?.email || "alex.morgan@example.com");
+  const [fullName, setFullName] = useState(user?.fullName || "Admin");
+  const [email, setEmail] = useState(user?.email || "admin@lgpsm.com");
   const [password, setPassword] = useState("••••••••••••••••");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(
     (user as any)?.avatarUrl || null
   );
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [savedMessage, setSavedMessage] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     if (user?.fullName) setFullName(user.fullName);
@@ -24,17 +30,39 @@ export default function AccountSettingsPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    await updateProfile({ fullName, email, avatarUrl } as any);
-    setSavedMessage(true);
-    setTimeout(() => setSavedMessage(false), 3000);
+    setErrorMessage("");
+    try {
+      await updateProfile({ fullName, email, avatarUrl } as any);
+      setSavedMessage(true);
+      setTimeout(() => setSavedMessage(false), 3000);
+    } catch (err: any) {
+      setErrorMessage(err?.message || "Failed to update profile.");
+    }
   };
 
-  const handleUpdatePassword = (_oldPass: string, newPass: string) => {
-    if (newPass) {
-      setPassword(newPass);
+  const handleUpdatePassword = async (_oldPass: string, newPass: string): Promise<boolean> => {
+    setErrorMessage("");
+    const token = tokenStorage.getAccessToken();
+    if (!token) {
+      setErrorMessage("Authentication token not found. Please log in again.");
+      return false;
     }
-    setSavedMessage(true);
-    setTimeout(() => setSavedMessage(false), 3000);
+
+    try {
+      const res = await authService.resetPassword(token, newPass);
+      if (res.success) {
+        setPassword("••••••••••••••••");
+        setSavedMessage(true);
+        setTimeout(() => setSavedMessage(false), 3000);
+        return true;
+      } else {
+        setErrorMessage(res.message || "Failed to update password in database.");
+        return false;
+      }
+    } catch (err: any) {
+      setErrorMessage(err?.message || "Failed to update password in database.");
+      return false;
+    }
   };
 
   const displayName = fullName || user?.fullName || user?.email || "Account Name";
@@ -44,18 +72,7 @@ export default function AccountSettingsPage() {
       {/* Header */}
       <header className="h-16 bg-white border-b border-gray-200 px-6 flex items-center justify-between shrink-0 sticky top-0 z-20">
         <h1 className="text-base font-bold text-gray-800">Account Settings</h1>
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 overflow-hidden shrink-0">
-            {avatarUrl ? (
-              <img src={avatarUrl} alt="Header Avatar" className="w-full h-full object-cover" />
-            ) : (
-              <svg className="w-4 h-4 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-              </svg>
-            )}
-          </div>
-          <span className="text-xs font-semibold text-gray-700">{displayName}</span>
-        </div>
+        <UserNavDropdown />
       </header>
 
       {/* Content */}
@@ -65,6 +82,12 @@ export default function AccountSettingsPage() {
         {savedMessage && (
           <div className="p-4 bg-green-50 border border-green-200 text-green-700 rounded-md text-xs font-semibold transition-all">
             Account details updated successfully!
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-md text-xs font-semibold transition-all">
+            {errorMessage}
           </div>
         )}
 

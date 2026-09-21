@@ -6,214 +6,21 @@ import { useParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { sessionService } from "@/services/sessionService";
 import EventSubNav from "@/components/EventSubNav";
+import UserNavDropdown from "@/components/common/UserNavDropdown";
 import { getAssignedCountText, SystemUserRow, AssignedEventCard, AssignedSession } from "@/app/(dashboard)/user-management/assign/page";
-
-const DEFAULT_EVENT_USERS: SystemUserRow[] = [
-  {
-    id: "1",
-    name: "Moloy Roy",
-    email: "tanya.hill@example.com",
-    phone: "9674259986",
-    assignedEvents: [
-      {
-        id: "evt_1",
-        eventName: "Nivita Birthday",
-        dateStr: "3rd June 2026",
-        sessions: [
-          { id: "s1", name: "LUNCH SESSION", time: "12:30 PM TO 4:30 PM" },
-          { id: "s2", name: "ENTRY SESSION", time: "06:30 PM TO 12:00 AM" },
-        ],
-      },
-      {
-        id: "evt_2",
-        eventName: "Sumanta Marriage Anniversary",
-        dateStr: "3rd Aug 2026",
-        sessions: [{ id: "s3", name: "DINNER SESSION", time: "08:30 PM TO 11:30 PM" }],
-      },
-    ],
-  },
-  {
-    id: "2",
-    name: "Wade Warren",
-    email: "willie.jennings@example.com",
-    phone: "(671) 555-0110",
-    assignedEvents: [
-      {
-        id: "evt_3",
-        eventName: "Product Launch Event 2026",
-        dateStr: "10th May 2026",
-        sessions: [
-          { id: "s4", name: "ENTRY SESSION", time: "09:00 AM TO 12:00 PM" },
-          { id: "s5", name: "KEYNOTE SESSION", time: "01:00 PM TO 04:00 PM" },
-        ],
-      },
-    ],
-  },
-  {
-    id: "3",
-    name: "Guy Hawkins",
-    email: "bill.sanders@example.com",
-    phone: "(316) 555-0116",
-    assignedEvents: [
-      {
-        id: "evt_4",
-        eventName: "Annual Tech Summit",
-        dateStr: "15th Aug 2026",
-        sessions: [{ id: "s6", name: "MORNING SESSION", time: "09:00 AM TO 01:00 PM" }],
-      },
-      {
-        id: "evt_5",
-        eventName: "Developer Meetup",
-        dateStr: "20th Sep 2026",
-        sessions: [{ id: "s7", name: "AFTERNOON SESSION", time: "02:00 PM TO 06:00 PM" }],
-      },
-      {
-        id: "evt_6",
-        eventName: "Design Workshop",
-        dateStr: "05th Oct 2026",
-        sessions: [{ id: "s8", name: "WORKSHOP 1", time: "10:00 AM TO 01:00 PM" }],
-      },
-      {
-        id: "evt_7",
-        eventName: "AI Conference 2026",
-        dateStr: "12th Nov 2026",
-        sessions: [{ id: "s9", name: "KEYNOTE", time: "10:00 AM TO 02:00 PM" }],
-      },
-    ],
-  },
-  {
-    id: "4",
-    name: "Marvin McKinney",
-    email: "tim.jennings@example.com",
-    phone: "(219) 555-0114",
-    assignedEvents: [
-      {
-        id: "evt_3",
-        eventName: "Product Launch Event 2026",
-        dateStr: "10th May 2026",
-        sessions: [{ id: "s4", name: "ENTRY SESSION", time: "09:00 AM TO 12:00 PM" }],
-      },
-      {
-        id: "evt_1",
-        eventName: "Nivita Birthday",
-        dateStr: "3rd June 2026",
-        sessions: [{ id: "s3", name: "DINNER SESSION", time: "08:30 PM TO 11:30 PM" }],
-      },
-    ],
-  },
-  {
-    id: "5",
-    name: "Albert Flores",
-    email: "dolores.chambers@example.com",
-    phone: "(702) 555-[#FF5B22]0122",
-    assignedEvents: [],
-  },
-  {
-    id: "6",
-    name: "Eleanor Pena",
-    email: "michelle.rivera@example.com",
-    phone: "(684) 555-0102",
-    assignedEvents: [
-      {
-        id: "evt_8",
-        eventName: "Global Innovators Expo",
-        dateStr: "14th Apr 2026",
-        sessions: [
-          { id: "s10", name: "SESSION A", time: "10:00 AM TO 01:00 PM" },
-          { id: "s11", name: "SESSION B", time: "02:00 PM TO 05:00 PM" },
-        ],
-      },
-      {
-        id: "evt_9",
-        eventName: "Startup Pitch 2026",
-        dateStr: "18th May 2026",
-        sessions: [{ id: "s12", name: "PITCH SESSION", time: "11:00 AM TO 03:00 PM" }],
-      },
-      {
-        id: "evt_10",
-        eventName: "Frankline Airline AGM 2026",
-        dateStr: "15 Jul 2026",
-        sessions: [{ id: "s13", name: "ENTRY SESSION", time: "01:00 PM TO 03:00 PM" }],
-      },
-    ],
-  },
-  {
-    id: "7",
-    name: "Eleanor Pena",
-    email: "michelle.rivera@example.com",
-    phone: "(684) 555-0102",
-    assignedEvents: [
-      {
-        id: "evt_1",
-        eventName: "Nivita Birthday",
-        dateStr: "3rd June 2026",
-        sessions: [
-          { id: "s1", name: "LUNCH SESSION", time: "12:30 PM TO 4:30 PM" },
-          { id: "s2", name: "ENTRY SESSION", time: "06:30 PM TO 12:00 AM" },
-        ],
-      },
-      {
-        id: "evt_2",
-        eventName: "Sumanta Marriage Anniversary",
-        dateStr: "3rd Aug 2026",
-        sessions: [{ id: "s3", name: "DINNER SESSION", time: "08:30 PM TO 11:30 PM" }],
-      },
-      {
-        id: "evt_3",
-        eventName: "Product Launch Event 2026",
-        dateStr: "10th May 2026",
-        sessions: [
-          { id: "s4", name: "ENTRY SESSION", time: "09:00 AM TO 12:00 PM" },
-          { id: "s5", name: "KEYNOTE SESSION", time: "01:00 PM TO 04:00 PM" },
-        ],
-      },
-      {
-        id: "evt_4",
-        eventName: "Annual Tech Summit",
-        dateStr: "15th Aug 2026",
-        sessions: [
-          { id: "s6", name: "MORNING SESSION", time: "09:00 AM TO 01:00 PM" },
-          { id: "s7", name: "EVENING SESSION", time: "05:00 PM TO 09:00 PM" },
-        ],
-      },
-    ],
-  },
-  {
-    id: "8",
-    name: "Suzana Parveen",
-    email: "michelle.rivera@example.com",
-    phone: "(684) 555-0102",
-    assignedEvents: [
-      {
-        id: "evt_1",
-        eventName: "Nivita Birthday",
-        dateStr: "3rd June 2026",
-        sessions: [
-          { id: "s1", name: "LUNCH SESSION", time: "12:30 PM TO 4:30 PM" },
-          { id: "s2", name: "ENTRY SESSION", time: "06:30 PM TO 12:00 AM" },
-        ],
-      },
-      {
-        id: "evt_2",
-        eventName: "Sumanta Marriage Anniversary",
-        dateStr: "3rd Aug 2026",
-        sessions: [{ id: "s3", name: "DINNER SESSION", time: "08:30 PM TO 11:30 PM" }],
-      },
-    ],
-  },
-];
+import { userService } from "@/services/userService";
 
 export default function AssignSystemUsersPage() {
   const params = useParams();
   const eventId = (params?.id as string);
   const { user } = useAuth();
 
-  const [users, setUsers] = useState<SystemUserRow[]>(DEFAULT_EVENT_USERS);
+  const [users, setUsers] = useState<SystemUserRow[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [selectedUserIds, setSelectedUserIds] = useState<string[]>(["1", "3", "4", "6", "8"]);
-  const [expandedUserIds, setExpandedUserIds] = useState<string[]>(["1"]);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [expandedUserIds, setExpandedUserIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
 
@@ -237,36 +44,40 @@ export default function AssignSystemUsersPage() {
     // Fetch sessions
     let fetchedSessions: any[] = [];
     try {
-      const sessionsRes = await sessionService.getSessions(eventId);
-      if (sessionsRes?.success && Array.isArray(sessionsRes.data)) {
-        fetchedSessions = sessionsRes.data;
+      const res = await sessionService.getSessions(eventId);
+      if (res?.success && Array.isArray(res.data)) {
+        fetchedSessions = res.data;
       }
-    } catch (error) { }
+    } catch (e) { }
 
-    // Check local sessions
     let localSessions: any[] = [];
     try {
-      const keysToTry = [`app_local_sessions_${eventId}`, "app_local_sessions_1", "app_local_sessions"];
-      keysToTry.forEach((key) => {
-        const cached = localStorage.getItem(key);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed)) localSessions.push(...parsed);
-        }
-      });
+      const cached = localStorage.getItem(`app_local_sessions_${eventId}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) localSessions.push(...parsed);
+      }
     } catch (e) { }
 
     const combinedSessions = [...fetchedSessions, ...localSessions];
-    if (combinedSessions.length === 0) {
-      combinedSessions.push(
-        { id: "s1", name: "Entry Session" },
-        { id: "s2", name: "Lunch Session" },
-        { id: "s3", name: "Dinner Session" }
-      );
-    }
     setSessions(combinedSessions);
 
-    // Fetch system users from local storage keys
+    // Fetch system users from API and local storage
+    let apiUsers: SystemUserRow[] = [];
+    try {
+      const res = await userService.getUsers();
+      const rawList = Array.isArray(res?.data) ? res.data : ((res?.data as any)?.users || []);
+      if (res?.success && Array.isArray(rawList)) {
+        apiUsers = rawList.map((u: any, idx: number) => ({
+          id: u._id || u.id || `api_usr_${idx}`,
+          name: u.fullName || u.name || "System User",
+          email: u.email || "",
+          phone: u.phone || u.contactNo || "",
+          assignedEvents: u.assignedEvents || [],
+        }));
+      }
+    } catch (e) {}
+
     let localUsers: SystemUserRow[] = [];
     try {
       const keys = ["app_local_system_users", "app_local_users"];
@@ -295,14 +106,11 @@ export default function AssignSystemUsersPage() {
       });
     } catch (e) { }
 
-    const combined = [...localUsers];
-    DEFAULT_EVENT_USERS.forEach((def) => {
-      if (!combined.some((item) => item.name.toLowerCase() === def.name.toLowerCase() && item.email.toLowerCase() === def.email.toLowerCase())) {
-        combined.push(def);
-      }
-    });
+    const combinedMap = new Map();
+    localUsers.forEach((u) => combinedMap.set(u.email || u.id, u));
+    apiUsers.forEach((u) => combinedMap.set(u.email || u.id, u));
 
-    setUsers(combined);
+    setUsers(Array.from(combinedMap.values()));
     setIsLoading(false);
   };
 
@@ -417,19 +225,7 @@ export default function AssignSystemUsersPage() {
       {/* Top Navigation Bar */}
       <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
         <h1 className="text-xl font-bold text-gray-900">Assign System Users</h1>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200/80 px-3 py-1.5 rounded-full cursor-pointer transition-colors">
-            <div className="w-7 h-7 rounded-full bg-gray-400 text-white flex items-center justify-center font-semibold text-xs">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <span className="text-xs font-semibold text-gray-800">{user?.fullName || "Jane Doe"}</span>
-            <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
-        </div>
+        <UserNavDropdown />
       </header>
 
       {/* Page Content */}

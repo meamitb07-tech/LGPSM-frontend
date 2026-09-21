@@ -77,7 +77,29 @@ export interface PresignData {
 
 // ─────────────────────────────────────────────
 // Event Service
-// ─────────────────────────────────────────────
+function formatEventPayload(payload: any) {
+  const title = payload.title || payload.eventName || "Untitled Event";
+  const startISO = payload.schedule?.start || (payload.startDate ? new Date(payload.startDate).toISOString() : new Date().toISOString());
+  let endDateObj = payload.schedule?.end || (payload.endDate ? new Date(payload.endDate) : new Date(Date.now() + 8 * 3600 * 1000));
+  if (typeof endDateObj === "string") endDateObj = new Date(endDateObj);
+  if (isNaN(endDateObj.getTime()) || endDateObj <= new Date(startISO)) {
+    endDateObj = new Date(new Date(startISO).getTime() + 8 * 3600 * 1000);
+  }
+  const endISO = endDateObj.toISOString();
+
+  return {
+    title,
+    description: payload.description || "Event Description",
+    format: "PHYSICAL",
+    schedule: {
+      start: startISO,
+      end: endISO,
+    },
+    location: {
+      address: typeof payload.location === "string" ? payload.location : payload.venue || "Grand Ballroom, Tech City",
+    },
+  };
+}
 
 export const eventService = {
   /**
@@ -85,9 +107,10 @@ export const eventService = {
    * POST /api/v1/events
    */
   async createEvent(payload: EventPayload): Promise<ApiResponse<EventData>> {
+    const formatted = formatEventPayload(payload);
     return apiClient<EventData>("/api/v1/events", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify(formatted),
     }, true);
   },
 
