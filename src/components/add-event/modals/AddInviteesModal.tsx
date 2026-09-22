@@ -5,6 +5,7 @@ import { gsap } from "gsap";
 import { inviteeService } from "@/services/inviteeService";
 import { eventService } from "@/services/eventService";
 import { sessionService } from "@/services/sessionService";
+import CustomDropdown from "@/components/common/CustomDropdown";
 import * as XLSX from "xlsx";
 
 interface AddInviteesModalProps {
@@ -304,21 +305,12 @@ export default function AddInviteesModal({
             <label className="text-xs font-semibold text-gray-800">
               Select event<span className="text-[#FF5B22] ml-0.5">*</span>
             </label>
-            <select
+            <CustomDropdown
               value={selectedEventId}
-              onChange={(e) => setSelectedEventId(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-md text-xs text-gray-800 font-medium focus:outline-none focus:border-[#FF5B22] cursor-pointer"
-            >
-              {eventsList.length === 0 ? (
-                <option value="">No events available</option>
-              ) : (
-                eventsList.map((ev) => (
-                  <option key={ev.id} value={ev.id}>
-                    {ev.title}
-                  </option>
-                ))
-              )}
-            </select>
+              onChange={(val) => setSelectedEventId(val)}
+              options={eventsList.map((ev) => ({ value: ev.id, label: ev.title }))}
+              placeholder="Select event"
+            />
           </div>
 
           {/* Select Session */}
@@ -326,17 +318,12 @@ export default function AddInviteesModal({
             <label className="text-xs font-semibold text-gray-800">
               Select session<span className="text-[#FF5B22] ml-0.5">*</span>
             </label>
-            <select
+            <CustomDropdown
               value={selectedSessionId}
-              onChange={(e) => setSelectedSessionId(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-md text-xs text-gray-800 font-medium focus:outline-none focus:border-[#FF5B22] cursor-pointer"
-            >
-              {sessionsList.map((sess) => (
-                <option key={sess.id} value={sess.id}>
-                  {sess.name}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setSelectedSessionId(val)}
+              options={sessionsList.map((sess) => ({ value: sess.id, label: sess.name }))}
+              placeholder="Select session"
+            />
           </div>
 
           {/* Add Invitees List File Input */}

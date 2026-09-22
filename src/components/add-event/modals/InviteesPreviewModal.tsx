@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import EditInviteeModal from "./EditInviteeModal";
 import DeleteInviteeModal from "./DeleteInviteeModal";
+import CustomDropdown from "@/components/common/CustomDropdown";
 import { gsap } from "gsap";
 
 interface InviteeRow {
@@ -48,10 +49,10 @@ export default function InviteesPreviewModal({
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (inviteesList) {
+    if (isOpen && inviteesList) {
       setList(inviteesList);
     }
-  }, [inviteesList]);
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && overlayRef.current && modalRef.current) {
@@ -125,15 +126,16 @@ export default function InviteesPreviewModal({
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="flex-1 px-3.5 py-2.5 bg-transparent text-xs font-medium text-gray-800 placeholder:text-gray-400 focus:outline-none"
               />
-              <div className="border-l border-gray-200 px-3 py-2 bg-white flex items-center shrink-0">
-                <select
+              <div className="border-l border-gray-200 px-2 py-1 bg-white flex items-center shrink-0 w-48">
+                <CustomDropdown
                   value={selectedSession}
-                  onChange={(e) => setSelectedSession(e.target.value)}
-                  className="text-xs font-semibold text-gray-800 bg-transparent focus:outline-none cursor-pointer pr-1"
-                >
-                  <option value="Session 1 - Entry Session">Session 1 - Entry Session</option>
-                  <option value="Session 2 - Lunch Session">Session 2 - Lunch Session</option>
-                </select>
+                  onChange={(val) => setSelectedSession(val)}
+                  options={[
+                    { value: "Session 1 - Entry Session", label: "Session 1 - Entry Session" },
+                    { value: "Session 2 - Lunch Session", label: "Session 2 - Lunch Session" },
+                  ]}
+                  placeholder="Select Session"
+                />
               </div>
             </div>
           </div>

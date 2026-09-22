@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import CustomDropdown from "@/components/common/CustomDropdown";
 import * as XLSX from "xlsx";
 
 interface SessionData {
@@ -329,18 +330,18 @@ export default function Step3Sessions({
                   </span>
                 </span>
               </div>
-              <select
+              <CustomDropdown
                 value={sess.accessControl}
-                onChange={(e) => {
-                  const val = e.target.value;
+                onChange={(val) => {
                   setSessions(sessions.map((s) => (s.id === sess.id ? { ...s, accessControl: val } : s)));
                 }}
-                className="w-full px-3 py-2.5 bg-[#F9FAFB] border border-gray-200 rounded-md text-gray-900 font-medium text-xs focus:outline-none cursor-pointer"
-              >
-                <option value="No Restrictions">No Restrictions</option>
-                <option value="Only Once">Only Once</option>
-                <option value="Multiple Entry">Multiple Entry</option>
-              </select>
+                options={[
+                  { value: "No Restrictions", label: "No Restrictions" },
+                  { value: "Only Once", label: "Only Once" },
+                  { value: "Multiple Entry", label: "Multiple Entry" },
+                ]}
+                placeholder="Access Control"
+              />
             </div>
           </div>
 
@@ -370,17 +371,19 @@ export default function Step3Sessions({
                 <span className="text-xs font-medium text-gray-500">Keep same invitees as</span>
               </label>
 
-              <select
-                value={sess.keepSameInviteesAs || "-select-"}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setSessions(sessions.map((s) => (s.id === sess.id ? { ...s, keepSameInviteesAs: val } : s)));
-                }}
-                className="px-2.5 py-1 bg-[#F9FAFB] border border-gray-200 rounded-md text-xs font-semibold text-gray-500 cursor-pointer"
-              >
-                <option value="-select-">-select-</option>
-                <option value="Session 1">Session 1</option>
-              </select>
+              <div className="w-36">
+                <CustomDropdown
+                  value={sess.keepSameInviteesAs || "-select-"}
+                  onChange={(val) => {
+                    setSessions(sessions.map((s) => (s.id === sess.id ? { ...s, keepSameInviteesAs: val } : s)));
+                  }}
+                  options={[
+                    { value: "-select-", label: "-select-" },
+                    { value: "Session 1", label: "Session 1" },
+                  ]}
+                  placeholder="-select-"
+                />
+              </div>
             </div>
           )}
 

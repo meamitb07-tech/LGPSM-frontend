@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { userService } from "@/services/userService";
 import UserNavDropdown from "@/components/common/UserNavDropdown";
+import CustomDropdown from "@/components/common/CustomDropdown";
 import { eventService } from "@/services/eventService";
 import { getAssignedCountText, SystemUserRow, AssignedEventCard, AssignedSession } from "@/app/(dashboard)/user-management/assign/page";
 
@@ -485,17 +486,12 @@ export default function AllUsersPage() {
                 <label className="text-xs font-semibold text-gray-800">
                   Event<span className="text-[#FF5B22]">*</span>
                 </label>
-                <select
+                <CustomDropdown
                   value={selectedEvent}
-                  onChange={(e) => setSelectedEvent(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-md text-xs text-gray-800 focus:outline-none focus:border-[#FF5B22] cursor-pointer"
-                >
-                  {eventsList.map((evt) => (
-                    <option key={evt.id} value={evt.name}>
-                      {evt.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setSelectedEvent(val)}
+                  options={eventsList.map((evt) => ({ value: evt.name, label: evt.name }))}
+                  placeholder="Select Event"
+                />
               </div>
 
               {/* Session Dropdown */}
@@ -503,17 +499,18 @@ export default function AllUsersPage() {
                 <label className="text-xs font-semibold text-gray-800">
                   Session<span className="text-[#FF5B22]">*</span>
                 </label>
-                <select
+                <CustomDropdown
                   value={selectedSession}
-                  onChange={(e) => setSelectedSession(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-md text-xs text-gray-800 focus:outline-none focus:border-[#FF5B22] cursor-pointer"
-                >
-                  <option value="Entry Session">Entry Session</option>
-                  <option value="Lunch Session">Lunch Session</option>
-                  <option value="Dinner Session">Dinner Session</option>
-                  <option value="Morning Session">Morning Session</option>
-                  <option value="Keynote Session">Keynote Session</option>
-                </select>
+                  onChange={(val) => setSelectedSession(val)}
+                  options={[
+                    { value: "Entry Session", label: "Entry Session" },
+                    { value: "Lunch Session", label: "Lunch Session" },
+                    { value: "Dinner Session", label: "Dinner Session" },
+                    { value: "Morning Session", label: "Morning Session" },
+                    { value: "Keynote Session", label: "Keynote Session" },
+                  ]}
+                  placeholder="Select Session"
+                />
               </div>
 
               <div className="pt-2 pb-6 flex items-center justify-end gap-3">

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
@@ -11,6 +11,7 @@ import { sessionService } from "@/services/sessionService";
 import { inviteeService } from "@/services/inviteeService";
 import EventSubNav from "@/components/EventSubNav";
 import UserNavDropdown from "@/components/common/UserNavDropdown";
+import CustomDropdown from "@/components/common/CustomDropdown";
 
 export default function InviteesManagementPage() {
   const params = useParams();
@@ -178,6 +179,16 @@ export default function InviteesManagementPage() {
     }
   };
 
+  const previewInviteesList = useMemo(() => {
+    if (invitees.length === 0) return undefined;
+    return invitees.map((inv, idx) => ({
+      id: String(idx + 1).padStart(2, "0"),
+      name: inv.name || "Invitee",
+      email: inv.email || "invitee@example.com",
+      phone: inv.mobile || inv.phone || "+919000000000",
+    }));
+  }, [invitees]);
+
   const isAllSelected = selectedIds.length === invitees.length && invitees.length > 0;
 
   const filteredInvitees = invitees.filter(
@@ -237,36 +248,31 @@ export default function InviteesManagementPage() {
 
             {/* Filter Dropdowns & Top Action Buttons */}
             <div className="flex flex-wrap items-center gap-3 shrink-0">
-              <select
-                value={selectedEventFilter}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setSelectedEventFilter(val);
-                  if (val && val !== "All Events" && val !== eventId) {
-                    router.push(`/events/${val}/invitees`);
-                  }
-                }}
-                className="px-3 py-2 bg-white border border-gray-200 rounded-md text-xs text-gray-700 font-medium focus:outline-none focus:border-[#FF5B22] cursor-pointer"
-              >
-                {eventsOptions.map((ev) => (
-                  <option key={ev.id} value={ev.id}>
-                    {ev.title}
-                  </option>
-                ))}
-              </select>
+              <div className="w-48">
+                <CustomDropdown
+                  value={selectedEventFilter}
+                  onChange={(val) => {
+                    setSelectedEventFilter(val);
+                    if (val && val !== "All Events" && val !== eventId) {
+                      router.push(`/events/${val}/invitees`);
+                    }
+                  }}
+                  options={eventsOptions.map((ev) => ({ value: ev.id, label: ev.title }))}
+                  placeholder="Select Event"
+                />
+              </div>
 
-              <select
-                value={selectedSessionFilter}
-                onChange={(e) => setSelectedSessionFilter(e.target.value)}
-                className="px-3 py-2 bg-white border border-gray-200 rounded-md text-xs text-gray-700 font-medium focus:outline-none focus:border-[#FF5B22] cursor-pointer"
-              >
-                <option value="All Sessions">Select Session</option>
-                {sessionsOptions.map((sess) => (
-                  <option key={sess.id} value={sess.id}>
-                    {sess.name}
-                  </option>
-                ))}
-              </select>
+              <div className="w-48">
+                <CustomDropdown
+                  value={selectedSessionFilter}
+                  onChange={(val) => setSelectedSessionFilter(val)}
+                  options={[
+                    { value: "All Sessions", label: "Select Session" },
+                    ...sessionsOptions.map((sess) => ({ value: sess.id, label: sess.name })),
+                  ]}
+                  placeholder="Select Session"
+                />
+              </div>
 
               <button
                 type="button"
@@ -480,12 +486,7 @@ export default function InviteesManagementPage() {
       <InviteesPreviewModal
         isOpen={isPreviewModalOpen}
         onClose={() => setIsPreviewModalOpen(false)}
-        inviteesList={invitees.length > 0 ? invitees.map((inv, idx) => ({
-          id: String(idx + 1).padStart(2, "0"),
-          name: inv.name || "Invitee",
-          email: inv.email || "invitee@example.com",
-          phone: inv.mobile || inv.phone || "+919000000000",
-        })) : undefined}
+        inviteesList={previewInviteesList}
         sessionName="Session 1 - Entry Session"
         onSave={(updatedList) => {
           const formatted = updatedList.map((u) => ({
