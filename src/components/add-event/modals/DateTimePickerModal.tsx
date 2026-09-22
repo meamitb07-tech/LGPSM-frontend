@@ -13,6 +13,10 @@ interface DateTimePickerModalProps {
 const HOURS = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"];
 const MINUTES = Array.from({ length: 60 }, (_, i) => (i < 10 ? `0${i}` : `${i}`));
 const AMPM = ["AM", "PM"];
+const MONTH_NAMES = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+];
 
 interface WheelColumnProps {
   items: string[];
@@ -23,25 +27,25 @@ interface WheelColumnProps {
 function WheelColumn({ items, selectedIndex, onChange }: WheelColumnProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
+  const isProgrammaticRef = useRef(false);
   const startYRef = useRef(0);
   const startScrollTopRef = useRef(0);
-  const ITEM_HEIGHT = 40; // 40px row height
+  const ITEM_HEIGHT = 40;
 
-  // Sync scroll position when selectedIndex changes
   useEffect(() => {
     if (containerRef.current) {
       const targetScroll = selectedIndex * ITEM_HEIGHT;
-      if (Math.abs(containerRef.current.scrollTop - targetScroll) > 2) {
-        containerRef.current.scrollTo({
-          top: targetScroll,
-          behavior: "smooth",
-        });
-      }
+      isProgrammaticRef.current = true;
+      containerRef.current.scrollTop = targetScroll;
+      const timer = setTimeout(() => {
+        isProgrammaticRef.current = false;
+      }, 150);
+      return () => clearTimeout(timer);
     }
   }, [selectedIndex]);
 
   const handleScroll = () => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || isProgrammaticRef.current) return;
     const scrollTop = containerRef.current.scrollTop;
     const index = Math.round(scrollTop / ITEM_HEIGHT);
     if (index >= 0 && index < items.length && index !== selectedIndex) {
@@ -88,7 +92,6 @@ function WheelColumn({ items, selectedIndex, onChange }: WheelColumnProps) {
         msOverflowStyle: "none",
       }}
     >
-      {/* Top Spacer: 60px height to align 1st row in vertical center of 160px box */}
       <div style={{ height: 60 }} className="shrink-0 pointer-events-none" />
 
       {items.map((item, idx) => {
@@ -117,7 +120,6 @@ function WheelColumn({ items, selectedIndex, onChange }: WheelColumnProps) {
         );
       })}
 
-      {/* Bottom Spacer: 60px height */}
       <div style={{ height: 60 }} className="shrink-0 pointer-events-none" />
     </div>
   );
@@ -127,23 +129,42 @@ export default function DateTimePickerModal({
   isOpen,
   onClose,
   onSave,
-  initialValue = "15/01/26 09.00 AM",
+  initialValue,
 }: DateTimePickerModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
 
-  const [selectedDay, setSelectedDay] = useState(15);
-  const [selectedHourIndex, setSelectedHourIndex] = useState(8); // "09"
-  const [selectedMinIndex, setSelectedMinIndex] = useState(0);   // "00"
-  const [selectedAmpmIndex, setSelectedAmpmIndex] = useState(0);  // "AM"
+  const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth()); // 0-indexed
+  const [selectedDay, setSelectedDay] = useState(() => new Date().getDate());
+  const [selectedHourIndex, setSelectedHourIndex] = useState(() => {
+    let h = new Date().getHours() % 12;
+    h = h ? h : 12;
+    const hIdx = HOURS.findIndex((item) => parseInt(item, 10) === h);
+    return hIdx !== -1 ? hIdx : 8;
+  });
+  const [selectedMinIndex, setSelectedMinIndex] = useState(() => {
+    const m = new Date().getMinutes();
+    const mIdx = MINUTES.findIndex((item) => parseInt(item, 10) === m);
+    return mIdx !== -1 ? mIdx : 0;
+  });
+  const [selectedAmpmIndex, setSelectedAmpmIndex] = useState(() => (new Date().getHours() >= 12 ? 1 : 0));
 
   useEffect(() => {
     if (initialValue) {
       const parts = initialValue.trim().split(" ");
       if (parts.length >= 3) {
-        const dayPart = parts[0].split("/")[0];
-        const parsedDay = parseInt(dayPart, 10);
-        if (!isNaN(parsedDay)) setSelectedDay(parsedDay);
+        const dateParts = parts[0].split("/");
+        if (dateParts.length >= 3) {
+          const parsedDay = parseInt(dateParts[0], 10);
+          const parsedMonth = parseInt(dateParts[1], 10) - 1;
+          let parsedYear = parseInt(dateParts[2], 10);
+          if (parsedYear < 100) parsedYear += 2000;
+
+          if (!isNaN(parsedDay) && parsedDay >= 1 && parsedDay <= 31) setSelectedDay(parsedDay);
+          if (!isNaN(parsedMonth) && parsedMonth >= 0 && parsedMonth < 12) setCurrentMonth(parsedMonth);
+          if (!isNaN(parsedYear)) setCurrentYear(parsedYear);
+        }
 
         const timePart = parts[1].replace(".", ":");
         const [h, m] = timePart.split(":");
@@ -158,6 +179,21 @@ export default function DateTimePickerModal({
         const aIdx = AMPM.findIndex((item) => item === ampm);
         if (aIdx !== -1) setSelectedAmpmIndex(aIdx);
       }
+    } else {
+      const now = new Date();
+      setSelectedDay(now.getDate());
+      setCurrentMonth(now.getMonth());
+      setCurrentYear(now.getFullYear());
+
+      let h = now.getHours() % 12;
+      h = h ? h : 12;
+      const hIdx = HOURS.findIndex((item) => parseInt(item, 10) === h);
+      if (hIdx !== -1) setSelectedHourIndex(hIdx);
+
+      const mIdx = MINUTES.findIndex((item) => parseInt(item, 10) === now.getMinutes());
+      if (mIdx !== -1) setSelectedMinIndex(mIdx);
+
+      setSelectedAmpmIndex(now.getHours() >= 12 ? 1 : 0);
     }
   }, [isOpen, initialValue]);
 
@@ -177,15 +213,85 @@ export default function DateTimePickerModal({
 
   if (!isOpen) return null;
 
+  // Calendar calculations
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDayOfWeek = new Date(currentYear, currentMonth, 1).getDay(); // 0 = Sun
+  const prevMonthDays = new Date(currentYear, currentMonth, 0).getDate();
+
+  const handlePrevMonth = () => {
+    if (currentMonth === 0) {
+      setCurrentMonth(11);
+      setCurrentYear((y) => y - 1);
+    } else {
+      setCurrentMonth((m) => m - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (currentMonth === 11) {
+      setCurrentMonth(0);
+      setCurrentYear((y) => y + 1);
+    } else {
+      setCurrentMonth((m) => m + 1);
+    }
+  };
+
   const handleSave = () => {
     const dayStr = selectedDay < 10 ? `0${selectedDay}` : `${selectedDay}`;
+    const monthNum = currentMonth + 1;
+    const monthStr = monthNum < 10 ? `0${monthNum}` : `${monthNum}`;
+    const yearShortStr = String(currentYear).slice(-2);
     const hourStr = HOURS[selectedHourIndex];
     const minStr = MINUTES[selectedMinIndex];
     const ampmStr = AMPM[selectedAmpmIndex];
-    const result = `${dayStr}/01/26 ${hourStr}.${minStr} ${ampmStr}`;
+    const result = `${dayStr}/${monthStr}/${yearShortStr} ${hourStr}.${minStr} ${ampmStr}`;
     onSave(result);
     onClose();
   };
+
+  // Build grid items
+  const calendarCells = [];
+
+  // 1. Previous month padding
+  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+    const dayNum = prevMonthDays - i;
+    calendarCells.push(
+      <span key={`prev-${dayNum}`} className="text-[#FDBA74] py-1 cursor-default">
+        {dayNum < 10 ? `0${dayNum}` : dayNum}
+      </span>
+    );
+  }
+
+  // 2. Current month days (ALL CLICKABLE)
+  for (let day = 1; day <= daysInMonth; day++) {
+    const isSelected = day === selectedDay;
+    const dayDisplay = day < 10 ? `0${day}` : `${day}`;
+    calendarCells.push(
+      <button
+        key={`curr-${day}`}
+        type="button"
+        onClick={() => setSelectedDay(day)}
+        className={`mx-auto flex items-center justify-center text-xs font-bold cursor-pointer transition-colors py-1 ${
+          isSelected
+            ? "text-[#2563EB] border-b-2 border-[#2563EB] pb-0.5"
+            : "hover:text-[#FF5B22] text-gray-900"
+        }`}
+      >
+        {dayDisplay}
+      </button>
+    );
+  }
+
+  // 3. Next month padding
+  const totalCellsSoFar = calendarCells.length;
+  const remainingCells = (7 - (totalCellsSoFar % 7)) % 7;
+  for (let i = 1; i <= remainingCells; i++) {
+    calendarCells.push(
+      <span key={`next-${i}`} className="text-[#FDBA74] py-1 cursor-default">
+        {i < 10 ? `0${i}` : i}
+      </span>
+    );
+  }
 
   return (
     <div
@@ -194,10 +300,10 @@ export default function DateTimePickerModal({
     >
       <div
         ref={modalRef}
-        className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col my-auto border border-gray-100"
+        className="bg-white rounded-md border border-gray-200 shadow-2xl max-w-lg w-full overflow-hidden flex flex-col my-auto"
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <h2 className="text-base font-bold text-gray-900">Select Date & Time</h2>
           <button
             onClick={onClose}
@@ -212,14 +318,24 @@ export default function DateTimePickerModal({
         {/* Content Body: Calendar (Left) + Wheel Picker (Right) */}
         <div className="p-6 grid grid-cols-1 sm:grid-cols-12 gap-6 items-center">
           {/* Left Side: Calendar Grid */}
-          <div className="sm:col-span-7 bg-[#F4F5F8] p-4 rounded-xl border border-gray-100">
+          <div className="sm:col-span-7 bg-[#F4F5F8] p-4 rounded-md border border-gray-200">
             {/* Header: Chevrons + Month */}
             <div className="flex items-center justify-between mb-3 px-1">
-              <button className="text-[#FF5B22] hover:opacity-80 text-sm font-bold cursor-pointer px-1">
+              <button
+                type="button"
+                onClick={handlePrevMonth}
+                className="text-[#FF5B22] hover:opacity-80 text-sm font-bold cursor-pointer px-1"
+              >
                 &lt;
               </button>
-              <span className="text-xs font-bold text-gray-900">Jan 2026</span>
-              <button className="text-[#FF5B22] hover:opacity-80 text-sm font-bold cursor-pointer px-1">
+              <span className="text-xs font-bold text-gray-900">
+                {MONTH_NAMES[currentMonth]} {currentYear}
+              </span>
+              <button
+                type="button"
+                onClick={handleNextMonth}
+                className="text-[#FF5B22] hover:opacity-80 text-sm font-bold cursor-pointer px-1"
+              >
                 &gt;
               </button>
             </div>
@@ -237,60 +353,7 @@ export default function DateTimePickerModal({
 
             {/* Month Days Grid */}
             <div className="grid grid-cols-7 text-center gap-y-1.5 text-xs font-medium text-gray-800">
-              {/* Previous Month (Orange light) */}
-              <span className="text-[#FDBA74]">30</span>
-              <span>01</span>
-              <span>02</span>
-              <span>03</span>
-              <span>04</span>
-              <span>05</span>
-              <span>06</span>
-
-              <span>07</span>
-              <span>08</span>
-              <span>09</span>
-              <span>10</span>
-              <span>11</span>
-              <span>12</span>
-              <span>13</span>
-
-              <span>14</span>
-
-              {/* Day 15 (Selected with Blue Underline) */}
-              <button
-                onClick={() => setSelectedDay(15)}
-                className={`mx-auto flex items-center justify-center text-xs font-bold cursor-pointer transition-colors ${
-                  selectedDay === 15
-                    ? "text-[#2563EB] border-b-2 border-[#2563EB] pb-0.5"
-                    : "hover:text-[#FF5B22] text-gray-900"
-                }`}
-              >
-                15
-              </button>
-
-              <span>16</span>
-              <span>17</span>
-              <span>18</span>
-              <span>19</span>
-              <span>20</span>
-
-              <span>21</span>
-              <span>22</span>
-              <span>23</span>
-              <span>24</span>
-              <span>25</span>
-              <span>26</span>
-              <span>27</span>
-
-              <span>28</span>
-              <span>29</span>
-              <span>30</span>
-              <span>31</span>
-
-              {/* Next Month (Orange light) */}
-              <span className="text-[#FDBA74]">01</span>
-              <span className="text-[#FDBA74]">02</span>
-              <span className="text-[#FDBA74]">03</span>
+              {calendarCells}
             </div>
           </div>
 
@@ -321,7 +384,7 @@ export default function DateTimePickerModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+        <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
           <button
             onClick={onClose}
             className="px-6 py-2 border border-gray-300 hover:bg-gray-50 text-gray-900 font-bold text-xs rounded-lg transition-colors cursor-pointer"

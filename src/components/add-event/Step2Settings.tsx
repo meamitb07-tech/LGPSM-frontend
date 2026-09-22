@@ -215,7 +215,7 @@ export default function Step2Settings({ onNext, onBack }: Step2SettingsProps) {
               {categories.map((category, catIdx) => (
                 <div
                   key={category.id}
-                  className="pt-4 border-t border-gray-100 first:border-t-0 first:pt-0 space-y-4"
+                  className="pt-4 border-t border-gray-200 first:border-t-0 first:pt-0 space-y-4"
                 >
                   <div className="flex items-center justify-between">
                     <label className="block text-xs font-bold text-gray-900">
@@ -308,7 +308,7 @@ export default function Step2Settings({ onNext, onBack }: Step2SettingsProps) {
               ))}
 
               {/* "+ Add Another" Button for adding new Preference Categories */}
-              <div className="pt-3 border-t border-gray-100">
+              <div className="pt-3 border-t border-gray-200">
                 <button
                   type="button"
                   onClick={handleAddCategory}
@@ -323,7 +323,7 @@ export default function Step2Settings({ onNext, onBack }: Step2SettingsProps) {
       </div>
 
       {/* Bottom Footer Actions */}
-      <div className="pt-6 border-t border-gray-100 flex items-center justify-end gap-3">
+      <div className="pt-6 border-t border-gray-200 flex items-center justify-end gap-3">
         <button
           type="button"
           onClick={onBack}

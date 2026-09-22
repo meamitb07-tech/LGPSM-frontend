@@ -24,22 +24,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const refreshUser = async () => {
+    const storedUser = tokenStorage.getUser();
+    if (storedUser) setUser(storedUser);
+
     const token = tokenStorage.getAccessToken();
     if (!token) {
-      setUser(null);
       setIsLoading(false);
       return;
     }
-
-    const storedUser = tokenStorage.getUser();
-    if (storedUser) setUser(storedUser);
 
     try {
       const res = await userService.getProfile();
       if (res.success && res.data) {
         setUser(res.data);
-      } else if (!storedUser) {
-        setUser(null);
+        tokenStorage.setUser(res.data);
       }
     } catch {
       // keep stored user if network error occurs temporarily
@@ -65,28 +63,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (res.success && res.data?.user) {
       setUser(res.data.user);
       if (res.data.accessToken) tokenStorage.setAccessToken(res.data.accessToken);
-    } else if (res.success) {
-      const newUser: UserData = {
-        _id: "usr_" + Date.now(),
-        email: payload.email,
-        fullName: payload.fullName,
-        role: "admin",
-      };
-      tokenStorage.setUser(newUser);
-      tokenStorage.setAccessToken("mock_access_token_" + Date.now());
-      setUser(newUser);
-    } else {
-      // Fallback for demonstration mode when backend API is offline
-      const newUser: UserData = {
-        _id: "usr_" + Date.now(),
-        email: payload.email,
-        fullName: payload.fullName,
-        role: "admin",
-      };
-      tokenStorage.setUser(newUser);
-      tokenStorage.setAccessToken("mock_access_token_" + Date.now());
-      setUser(newUser);
-      return { success: true, message: "Registered successfully", data: { user: newUser } };
     }
     return res;
   };
@@ -105,6 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await userService.updateProfile(payload);
     if (res.success && res.data) {
       setUser(res.data);
+      tokenStorage.setUser(res.data);
     }
     return res;
   };

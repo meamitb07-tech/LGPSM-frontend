@@ -8,6 +8,7 @@ export interface UserData {
   authProvider?: string;
   isActive?: boolean;
   phone?: string;
+  avatarUrl?: string | null;
 }
 
 const ACCESS_TOKEN_KEY = "lgpsm_access_token";
@@ -38,6 +39,8 @@ export const tokenStorage = {
 
   getUser(): UserData | null {
     if (typeof window === "undefined") return null;
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    if (!token) return null;
     const data = localStorage.getItem(USER_KEY);
     if (!data) return null;
     try {

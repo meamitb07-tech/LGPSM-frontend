@@ -36,14 +36,14 @@ export default function DeleteInviteeModal({
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto font-sans"
+      className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto font-sans"
     >
       <div
         ref={modalRef}
-        className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col my-auto border border-gray-100 text-center relative"
+        className="bg-white rounded-md border border-gray-200 shadow-2xl max-w-md w-full overflow-hidden flex flex-col my-auto text-center relative"
       >
         {/* Modal Header (Image #3) */}
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between text-left">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between text-left">
           <h2 className="text-base font-bold text-gray-900">Delete Invitees</h2>
           <button
             onClick={onClose}

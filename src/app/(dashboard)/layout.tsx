@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import Sidebar from "@/components/Sidebar";
 
 export default function DashboardLayout({
   children,
@@ -10,13 +11,53 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { isAuthenticated, isLoading } = useAuth();
+  const pathname = usePathname();
+  const { user, isAuthenticated, isLoading } = useAuth();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.replace("/signin");
+      return;
     }
-  }, [isLoading, isAuthenticated, router]);
+
+    if (!isLoading && isAuthenticated && user) {
+      const userRole = user.role;
+
+      // 1. SYSTEM_USER route guard: strictly allowed ONLY on /dashboard and /settings/account
+      if (userRole === "SYSTEM_USER") {
+        const allowedSystemUserPaths = ["/dashboard", "/settings/account"];
+        const isAllowed = allowedSystemUserPaths.some(
+          (p) => pathname === p || pathname?.startsWith(p + "/")
+        );
+
+        if (!isAllowed) {
+          router.replace("/dashboard");
+        }
+      }
+
+      // 2. ORGANIZER route guard: blocked from administrative-only modules
+      if (userRole === "ORGANIZER") {
+        const isAssignPath = pathname === "/user-management/assign" || pathname?.startsWith("/user-management/assign/");
+
+        if (!isAssignPath) {
+          const blockedOrganizerPaths = [
+            "/user-management",
+            "/user-management/add",
+            "/event-organizer",
+            "/earnings",
+          ];
+
+          const isBlocked = blockedOrganizerPaths.some(
+            (p) => pathname === p || pathname?.startsWith(p + "/")
+          );
+
+          if (isBlocked) {
+            router.replace("/dashboard");
+          }
+        }
+      }
+    }
+  }, [isLoading, isAuthenticated, user, pathname, router]);
 
   if (isLoading) {
     return (
@@ -36,5 +77,12 @@ export default function DashboardLayout({
     return null;
   }
 
-  return <>{children}</>;
+  return (
+    <div className="flex flex-col md:flex-row h-screen bg-[#F8F9FA] overflow-hidden font-sans">
+      <Sidebar />
+      <main className="flex-1 overflow-y-auto min-w-0 flex flex-col">
+        {children}
+      </main>
+    </div>
+  );
 }

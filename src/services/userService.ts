@@ -3,7 +3,9 @@ import { UserData, tokenStorage } from "./tokenStorage";
 
 export interface UpdateProfilePayload {
   fullName?: string;
+  email?: string;
   phone?: string;
+  avatarUrl?: string | null;
 }
 
 export const userService = {
@@ -29,5 +31,31 @@ export const userService = {
       tokenStorage.setUser(response.data);
     }
     return response;
+  },
+
+  /**
+   * Create sub-user (ADMIN / ORGANIZER requirement)
+   * POST /api/users/
+   */
+  async createUser(payload: {
+    fullName: string;
+    email: string;
+    password?: string;
+    role?: "ADMIN" | "ORGANIZER" | "SYSTEM_USER";
+    phone?: string;
+  }): Promise<ApiResponse<UserData>> {
+    return apiClient<UserData>(
+      "/api/users/",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      true
+    );
+  },
+
+  async getUsers(role?: string): Promise<ApiResponse<UserData[]>> {
+    const url = role ? `/api/users?role=${role}` : "/api/users/";
+    return apiClient<UserData[]>(url, { method: "GET" }, true);
   },
 };

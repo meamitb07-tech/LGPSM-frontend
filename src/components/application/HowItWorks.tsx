@@ -148,7 +148,7 @@ export default function HowItWorks() {
         {/* Right Column: Mockup Card + Vertical Slider Indicator */}
         <div ref={mockupRef} className="lg:col-span-6 flex items-center gap-6 sm:gap-8">
           <div className="flex-1 relative rounded-2xl p-2 sm:p-3 bg-gradient-to-r from-[#FF7338] via-[#FF5B22] to-[#FF8546] shadow-2xl overflow-hidden">
-            <div className="relative rounded-xl overflow-hidden bg-gray-900 aspect-[16/10] sm:aspect-[16/9] flex items-center justify-center group cursor-pointer">
+            <div className="relative rounded-md overflow-hidden bg-gray-900 aspect-[16/10] sm:aspect-[16/9] flex items-center justify-center group cursor-pointer">
               <Image
                 src="/images/auth/Auth.png"
                 alt="LGPSM Step Preview"
@@ -173,9 +173,8 @@ export default function HowItWorks() {
                 <button
                   key={idx}
                   onClick={() => handleStepChange(idx)}
-                  className={`w-full h-5 transition-colors cursor-pointer ${
-                    activeStep === idx ? "bg-white" : "bg-transparent hover:bg-gray-600"
-                  }`}
+                  className={`w-full h-5 transition-colors cursor-pointer ${activeStep === idx ? "bg-white" : "bg-transparent hover:bg-gray-600"
+                    }`}
                 />
               ))}
             </div>

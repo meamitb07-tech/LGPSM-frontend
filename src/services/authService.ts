@@ -6,11 +6,13 @@ export interface RegisterPayload {
   email: string;
   password: string;
   phone?: string;
+  role?: string;
 }
 
 export interface LoginPayload {
   email: string;
   password: string;
+  role?: string;
 }
 
 export interface AuthResponseData {
@@ -21,10 +23,19 @@ export interface AuthResponseData {
 
 export const authService = {
   async register(payload: RegisterPayload): Promise<ApiResponse<AuthResponseData>> {
-    return apiClient<AuthResponseData>("/api/auth/register", {
+    const response = await apiClient<AuthResponseData>("/api/auth/register", {
       method: "POST",
       body: JSON.stringify(payload),
     });
+
+    if (response.success && response.data) {
+      const { user, accessToken, refreshToken } = response.data;
+      if (user) tokenStorage.setUser(user);
+      if (accessToken) tokenStorage.setAccessToken(accessToken);
+      if (refreshToken) tokenStorage.setRefreshToken(refreshToken);
+    }
+
+    return response;
   },
 
   async login(payload: LoginPayload): Promise<ApiResponse<AuthResponseData>> {

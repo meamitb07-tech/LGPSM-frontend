@@ -91,37 +91,33 @@ function ForgotPasswordContent() {
   return (
     <div className="min-h-screen lg:h-screen flex bg-white font-[family-name:var(--font-space-grotesk)] relative overflow-hidden">
       {/* ── Stage Selector Tabs (Top Right for easy previewing of 04A, 04B, 04C, 04D) ── */}
-      <div className="absolute top-4 right-4 z-50 bg-white/90 backdrop-blur border border-gray-200 p-1.5 rounded-xl shadow-lg flex items-center gap-1 text-xs font-semibold text-gray-700">
+      <div className="absolute top-4 right-4 z-50 bg-white/90 backdrop-blur border border-gray-200 p-1.5 rounded-md shadow-lg flex items-center gap-1 text-xs font-semibold text-gray-700">
         <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider px-2">Flow Stage:</span>
         <button
           onClick={() => setStage("04A")}
-          className={`px-2.5 py-1 rounded-lg transition-all ${
-            stage === "04A" ? "bg-[#FF5B22] text-white shadow-sm" : "hover:bg-gray-100"
-          }`}
+          className={`px-2.5 py-1 rounded-lg transition-all ${stage === "04A" ? "bg-[#FF5B22] text-white shadow-sm" : "hover:bg-gray-100"
+            }`}
         >
           04A: Email
         </button>
         <button
           onClick={() => setStage("04B")}
-          className={`px-2.5 py-1 rounded-lg transition-all ${
-            stage === "04B" ? "bg-[#FF5B22] text-white shadow-sm" : "hover:bg-gray-100"
-          }`}
+          className={`px-2.5 py-1 rounded-lg transition-all ${stage === "04B" ? "bg-[#FF5B22] text-white shadow-sm" : "hover:bg-gray-100"
+            }`}
         >
           04B: Sent
         </button>
         <button
           onClick={() => setStage("04C")}
-          className={`px-2.5 py-1 rounded-lg transition-all ${
-            stage === "04C" ? "bg-[#FF5B22] text-white shadow-sm" : "hover:bg-gray-100"
-          }`}
+          className={`px-2.5 py-1 rounded-lg transition-all ${stage === "04C" ? "bg-[#FF5B22] text-white shadow-sm" : "hover:bg-gray-100"
+            }`}
         >
           04C: Reset
         </button>
         <button
           onClick={() => setStage("04D")}
-          className={`px-2.5 py-1 rounded-lg transition-all ${
-            stage === "04D" ? "bg-[#FF5B22] text-white shadow-sm" : "hover:bg-gray-100"
-          }`}
+          className={`px-2.5 py-1 rounded-lg transition-all ${stage === "04D" ? "bg-[#FF5B22] text-white shadow-sm" : "hover:bg-gray-100"
+            }`}
         >
           04D: Success
         </button>
@@ -236,7 +232,7 @@ function ForgotPasswordContent() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={isSubmitting}
-                    className="w-full px-4 py-3 bg-[#F8F9FA] border border-gray-200/90 rounded-lg text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-gray-300 transition-all font-[family-name:var(--font-space-grotesk)] disabled:opacity-60"
+                    className="w-full px-4 py-3 bg-white border border-gray-200/90 rounded-lg text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-gray-300 transition-all font-[family-name:var(--font-space-grotesk)] disabled:opacity-60"
                   />
                 </div>
 
@@ -313,7 +309,7 @@ function ForgotPasswordContent() {
                       value={resetToken}
                       onChange={(e) => setResetToken(e.target.value)}
                       disabled={isSubmitting}
-                      className="w-full px-4 py-3 bg-[#F8F9FA] border border-gray-200/90 rounded-lg text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-gray-300 transition-all font-[family-name:var(--font-space-grotesk)] disabled:opacity-60"
+                      className="w-full px-4 py-3 bg-white border border-gray-200/90 rounded-lg text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-gray-300 transition-all font-[family-name:var(--font-space-grotesk)] disabled:opacity-60"
                     />
                   </div>
                 )}
@@ -330,7 +326,7 @@ function ForgotPasswordContent() {
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       disabled={isSubmitting}
-                      className="w-full px-4 py-3 bg-[#F8F9FA] border border-gray-200/90 rounded-lg text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-gray-300 transition-all pr-10 font-[family-name:var(--font-space-grotesk)] disabled:opacity-60"
+                      className="w-full px-4 py-3 bg-white border border-gray-200/90 rounded-lg text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-gray-300 transition-all pr-10 font-[family-name:var(--font-space-grotesk)] disabled:opacity-60"
                     />
                     <button
                       type="button"
@@ -363,7 +359,7 @@ function ForgotPasswordContent() {
                       value={repeatPassword}
                       onChange={(e) => setRepeatPassword(e.target.value)}
                       disabled={isSubmitting}
-                      className="w-full px-4 py-3 bg-[#F8F9FA] border border-gray-200/90 rounded-lg text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-gray-300 transition-all pr-10 font-[family-name:var(--font-space-grotesk)] disabled:opacity-60"
+                      className="w-full px-4 py-3 bg-white border border-gray-200/90 rounded-lg text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-gray-300 transition-all pr-10 font-[family-name:var(--font-space-grotesk)] disabled:opacity-60"
                     />
                     <button
                       type="button"

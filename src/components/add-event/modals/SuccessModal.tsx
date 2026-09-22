@@ -32,7 +32,7 @@ export default function SuccessModal({ isOpen, onClose }: SuccessModalProps) {
 
   const handleNavigate = () => {
     onClose();
-    router.push("/user-management");
+    router.push("/events");
   };
 
   return (
@@ -42,7 +42,7 @@ export default function SuccessModal({ isOpen, onClose }: SuccessModalProps) {
     >
       <div
         ref={modalRef}
-        className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8 text-center overflow-hidden my-auto relative border border-gray-100"
+        className="bg-white rounded-md border border-gray-200 shadow-2xl max-w-md w-full p-8 text-center overflow-hidden my-auto relative"
       >
         {/* Solid Green Checkmark Circle matching exact screenshot */}
         <div className="w-14 h-14 bg-[#10B981] text-white rounded-full flex items-center justify-center mx-auto mb-5 shadow-xs">
