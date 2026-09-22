@@ -6,6 +6,7 @@ import { inviteeService } from "@/services/inviteeService";
 import { eventService } from "@/services/eventService";
 import { sessionService } from "@/services/sessionService";
 import CustomDropdown from "@/components/common/CustomDropdown";
+import { useAlert } from "@/context/AlertContext";
 import * as XLSX from "xlsx";
 
 interface AddInviteesModalProps {
@@ -31,6 +32,7 @@ export default function AddInviteesModal({
   onUploadSuccess,
   eventId: initialEventId,
 }: AddInviteesModalProps) {
+  const { showAlert } = useAlert();
   const modalRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -78,7 +80,9 @@ export default function AddInviteesModal({
 
       setEventsList(combined);
 
-      if (!selectedEventId && combined.length > 0) {
+      if (initialEventId) {
+        setSelectedEventId(initialEventId);
+      } else if (!selectedEventId && combined.length > 0) {
         setSelectedEventId(combined[0].id);
       }
     }
@@ -92,8 +96,8 @@ export default function AddInviteesModal({
   useEffect(() => {
     async function loadSessions() {
       if (!selectedEventId) {
-        setSessionsList([{ id: "default", name: "Main Entry Session" }]);
-        setSelectedSessionId("default");
+        setSessionsList([]);
+        setSelectedSessionId("");
         return;
       }
 
@@ -101,24 +105,18 @@ export default function AddInviteesModal({
         const res = await sessionService.getSessions(selectedEventId);
         if (res?.success && Array.isArray(res.data) && res.data.length > 0) {
           const mapped = res.data.map((s: any, idx: number) => ({
-            id: s._id || s.id || `sess_${idx}`,
+            id: s._id || s.id,
             name: s.name || `Session ${idx + 1}`,
           }));
           setSessionsList(mapped);
           setSelectedSessionId(mapped[0].id);
         } else {
-          setSessionsList([
-            { id: "entry", name: "Session 1 - Entry Session" },
-            { id: "lunch", name: "Session 2 - Lunch Session" },
-          ]);
-          setSelectedSessionId("entry");
+          setSessionsList([]);
+          setSelectedSessionId("");
         }
       } catch {
-        setSessionsList([
-          { id: "entry", name: "Session 1 - Entry Session" },
-          { id: "lunch", name: "Session 2 - Lunch Session" },
-        ]);
-        setSelectedSessionId("entry");
+        setSessionsList([]);
+        setSelectedSessionId("");
       }
     }
 
@@ -152,7 +150,7 @@ export default function AddInviteesModal({
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!uploadedFile) {
-      alert("Please select an Excel or CSV file to upload.");
+      showAlert("Please select an Excel or CSV file to upload.", "warning");
       return;
     }
 
@@ -170,47 +168,58 @@ export default function AddInviteesModal({
       const worksheet = workbook.Sheets[firstSheetName];
       const rawRows = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1 });
 
-      let rows = rawRows.filter(
+      const nonBlankRows = rawRows.filter(
         (r) => r && Array.isArray(r) && r.some((cell) => cell !== null && cell !== undefined && String(cell).trim() !== "")
       );
 
-      // Skip header row if present
-      if (rows.length > 0) {
-        const firstRowStr = rows[0].map((c) => String(c).toLowerCase()).join(" ");
-        if (firstRowStr.includes("name") || firstRowStr.includes("email") || firstRowStr.includes("mobile") || firstRowStr.includes("phone")) {
-          rows = rows.slice(1);
+      if (nonBlankRows.length > 0) {
+        let nameIdx = 0;
+        let emailIdx = 1;
+        let mobileIdx = 2;
+        let dietaryIdx = 3;
+
+        const firstRowHeader = nonBlankRows[0].map((c) => String(c).toLowerCase().trim());
+        const hasHeader = firstRowHeader.some(
+          (h) => h.includes("name") || h.includes("email") || h.includes("mobile") || h.includes("phone")
+        );
+
+        if (hasHeader) {
+          firstRowHeader.forEach((h, idx) => {
+            if (h.includes("name")) nameIdx = idx;
+            else if (h.includes("email")) emailIdx = idx;
+            else if (h.includes("mobile") || h.includes("phone") || h.includes("contact")) mobileIdx = idx;
+            else if (h.includes("diet")) dietaryIdx = idx;
+          });
         }
-      }
 
-      inviteeCount = rows.length;
+        const dataRows = hasHeader ? nonBlankRows.slice(1) : nonBlankRows;
+        inviteeCount = dataRows.length;
 
-      if (rows.length > 0) {
-        parsedInvitees = rows.map((row, idx) => ({
-          id: `inv_${Date.now()}_${idx}`,
-          name: row[0] ? String(row[0]).trim() : `Invitee ${idx + 1}`,
-          email: row[1] ? String(row[1]).trim() : `invitee${idx + 1}@example.com`,
-          mobile: row[2] ? String(row[2]).trim() : `+9190000000${idx}`,
-          registrationStatus: "confirmed",
-          rsvpStatus: "accepted",
-          dietaryPreference: row[3] ? String(row[3]).trim() : "Veg",
-          entry: true,
-          lunch: true,
-        }));
+        parsedInvitees = dataRows.map((row, idx) => {
+          const nameVal = row[nameIdx] !== undefined ? String(row[nameIdx]).trim() : (row[0] ? String(row[0]).trim() : `Invitee ${idx + 1}`);
+          const emailVal = row[emailIdx] !== undefined ? String(row[emailIdx]).trim() : (row[1] ? String(row[1]).trim() : `invitee${idx + 1}@example.com`);
+          const mobileVal = row[mobileIdx] !== undefined ? String(row[mobileIdx]).trim() : (row[2] ? String(row[2]).trim() : `+9190000000${idx}`);
+          const dietVal = row[dietaryIdx] !== undefined ? String(row[dietaryIdx]).trim() : "Veg";
+
+          return {
+            id: `inv_${Date.now()}_${idx}`,
+            name: nameVal || `Invitee ${idx + 1}`,
+            email: emailVal || `invitee${idx + 1}@example.com`,
+            mobile: mobileVal || `+9190000000${idx}`,
+            registrationStatus: "confirmed",
+            rsvpStatus: "accepted",
+            dietaryPreference: dietVal,
+            entry: true,
+            lunch: true,
+          };
+        });
       }
     } catch (err) {
       console.warn("Excel parse fallback:", err);
     }
 
     if (parsedInvitees.length === 0) {
-      parsedInvitees = [
-        { id: "inv_1", name: "Moloy Roy", email: "diya.patel@yahoo.com", mobile: "+919062906466", registrationStatus: "confirmed", rsvpStatus: "accepted", dietaryPreference: "Veg", entry: true, lunch: true },
-        { id: "inv_2", name: "Chanchal Roy", email: "meera.jain@yahoo.com", mobile: "+918442128334", registrationStatus: "confirmed", rsvpStatus: "declined", dietaryPreference: "Non-Veg", entry: true, lunch: false },
-        { id: "inv_3", name: "Souvik K", email: "vihaan.chopra@outlook.com", mobile: "+916787249381", registrationStatus: "pending", rsvpStatus: "pending", dietaryPreference: "--", entry: false, lunch: false },
-        { id: "inv_4", name: "Subhendu Bhattacharjee", email: "ishaan.jain@hotmail.com", mobile: "+919474963438", registrationStatus: "confirmed", rsvpStatus: "accepted", dietaryPreference: "Jain", entry: true, lunch: true },
-        { id: "inv_5", name: "Sayan Ghosh", email: "vihaan.jain@hotmail.com", mobile: "+916327018843", registrationStatus: "confirmed", rsvpStatus: "accepted", dietaryPreference: "Veg", entry: true, lunch: true },
-        { id: "inv_6", name: "Sharmila Poddar", email: "arjun.verma@outlook.com", mobile: "+919616263073", registrationStatus: "confirmed", rsvpStatus: "accepted", dietaryPreference: "Non-Veg", entry: true, lunch: true },
-      ];
-      inviteeCount = parsedInvitees.length;
+      inviteeCount = 0;
     }
 
     try {

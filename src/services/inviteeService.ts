@@ -54,7 +54,7 @@ export const inviteeService = {
    * GET /api/v1/events/:eventId/invitees
    */
   async getInvitees(eventId: string): Promise<ApiResponse<InviteeData[]>> {
-    return apiClient<InviteeData[]>(`/api/v1/events/${eventId}/invitees`, {
+    return apiClient<InviteeData[]>(`/api/v1/events/${eventId}/invitees?limit=1000`, {
       method: "GET",
     }, true);
   },

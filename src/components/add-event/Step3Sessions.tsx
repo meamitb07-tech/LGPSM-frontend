@@ -18,7 +18,7 @@ interface SessionData {
 }
 
 interface Step3SessionsProps {
-  onFinish: () => void;
+  onFinish: (sessions?: SessionData[]) => void;
   onBack: () => void;
   onOpenInviteesPreview: (sessionName: string, inviteesList?: any[]) => void;
   onOpenDatePicker: (field: "start" | "end" | "rsvp", callback?: (val: string) => void) => void;
@@ -175,17 +175,7 @@ export default function Step3Sessions({
     }
 
     if (inviteesList.length === 0) {
-      inviteesList = [
-        { id: "01", name: "Moloy Roy", email: "diya.patel@yahoo.com", phone: "+919062906466" },
-        { id: "02", name: "Chanchal Roy", email: "meera.jain@yahoo.com", phone: "+918442128334" },
-        { id: "03", name: "Souvik K", email: "vihaan.chopra@outlook.com", phone: "+916787249381" },
-        { id: "04", name: "Subhendu Bhattacharjee", email: "ishaan.jain@hotmail.com", phone: "+919474963438" },
-        { id: "05", name: "Sayan Ghosh", email: "vihaan.jain@hotmail.com", phone: "+916327018843" },
-        { id: "06", name: "Sharmila Poddar", email: "arjun.verma@outlook.com", phone: "+919616263073" },
-        { id: "07", name: "Online User A", email: "user.a@example.com", phone: "+919876543210" },
-        { id: "08", name: "Online User B", email: "user.b@example.com", phone: "+919876543211" },
-      ];
-      count = inviteesList.length;
+      count = 0;
     }
 
     setSessions((prev) =>
@@ -204,7 +194,7 @@ export default function Step3Sessions({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onFinish();
+    onFinish(sessions);
   };
 
   return (

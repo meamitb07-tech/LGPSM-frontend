@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@/context/AuthContext";
 
 interface SidebarOrganizerGroupProps {
   activeItem?: string;
@@ -12,7 +13,11 @@ export default function SidebarOrganizerGroup({
   activeItem,
   isGroupActive,
 }: SidebarOrganizerGroupProps) {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(isGroupActive);
+
+  // Administrative module: Only visible to ADMIN
+  if (user?.role !== "ADMIN") return null;
 
   const navLinks = [
     { label: "Add New Organizer", href: "/event-organizer/add", activeKey: "add-organizer" },

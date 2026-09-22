@@ -30,96 +30,70 @@ export default function EventListingPage() {
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
 
+  const loadEvents = async () => {
+    setLoading(true);
+    try {
+      const res = await eventService.getEvents();
+      const rawList = Array.isArray(res?.data)
+        ? res.data
+        : ((res?.data as any)?.events || []);
+
+      if (res && res.success && Array.isArray(rawList)) {
+        const apiMapped: EventRow[] = rawList.map((item: any, index: number) => {
+          const id = item._id || item.id || String(index + 1);
+          const eventId = `#${String(id).slice(-4).toUpperCase()}`;
+
+          const rawStatus = (item.status || "Upcoming").toString().toUpperCase();
+          let mappedStatus: "Upcoming" | "Completed" | "Ongoing" | "Invitation Sent" = "Upcoming";
+          if (rawStatus === "PUBLISHED" || rawStatus === "ACTIVE" || rawStatus === "UPCOMING") {
+            mappedStatus = "Upcoming";
+          } else if (rawStatus === "COMPLETED") {
+            mappedStatus = "Completed";
+          } else if (rawStatus === "DRAFT" || rawStatus === "ONGOING") {
+            mappedStatus = "Ongoing";
+          }
+
+          const startVal = item.schedule?.start || item.startDate;
+          const endVal = item.schedule?.end || item.endDate;
+          const dynamicStatus = getDynamicEventStatus(startVal, endVal, mappedStatus);
+
+          return {
+            id,
+            eventId,
+            eventName: item.title || "Untitled Event",
+            organizer: item.organizerId?.fullName || user?.fullName || "Organizer",
+            createdOn: item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "Recently",
+            category: item.category || item.categoryId?.name || "Corporate",
+            startDate: startVal ? new Date(startVal).toLocaleString() : "TBD",
+            endDate: endVal ? new Date(endVal).toLocaleString() : "TBD",
+            status: dynamicStatus as EventRow["status"],
+          };
+        });
+        setEvents(apiMapped);
+      } else {
+        setEvents([]);
+      }
+    } catch (e) {
+      console.error("Failed to fetch events from API:", e);
+      setEvents([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDeleteEvent = async (id: string) => {
     try {
       await eventService.deleteEvent(id);
     } catch (e) {
-      console.warn("Backend delete warning:", e);
+      console.warn("Backend delete error:", e);
     }
-
-    // Update local state and local storage
-    const updatedEvents = events.filter((ev) => ev.id !== id);
-    setEvents(updatedEvents);
-    try {
-      localStorage.setItem("app_local_events", JSON.stringify(updatedEvents));
-    } catch (e) { }
 
     setDeletingEventId(null);
     setActiveActionId(null);
+    await loadEvents();
   };
 
   useEffect(() => {
-    async function loadEvents() {
-      setLoading(true);
-      let apiMapped: EventRow[] = [];
-      try {
-        const res = await eventService.getEvents();
-        const rawList = Array.isArray(res?.data)
-          ? res.data
-          : ((res?.data as any)?.events || []);
-
-        if (res && res.success && Array.isArray(rawList)) {
-          apiMapped = rawList.map((item: any, index: number) => {
-            const id = item._id || item.id || String(index + 1);
-            const eventId = `#${String(id).slice(-4).toUpperCase()}`;
-
-            const rawStatus = (item.status || "Upcoming").toString().toUpperCase();
-            let mappedStatus: "Upcoming" | "Completed" | "Ongoing" | "Invitation Sent" = "Upcoming";
-            if (rawStatus === "PUBLISHED" || rawStatus === "ACTIVE" || rawStatus === "UPCOMING") {
-              mappedStatus = "Upcoming";
-            } else if (rawStatus === "COMPLETED") {
-              mappedStatus = "Completed";
-            } else if (rawStatus === "DRAFT" || rawStatus === "ONGOING") {
-              mappedStatus = "Ongoing";
-            }
-
-            const startVal = item.schedule?.start || item.startDate;
-            const endVal = item.schedule?.end || item.endDate;
-
-            return {
-              id,
-              eventId,
-              eventName: item.title || "Untitled Event",
-              organizer: item.organizerId?.fullName || user?.fullName || "Organizer",
-              createdOn: item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "Recently",
-              category: item.category || item.categoryId?.name || "Corporate",
-              startDate: startVal ? new Date(startVal).toLocaleString() : "TBD",
-              endDate: endVal ? new Date(endVal).toLocaleString() : "TBD",
-              status: mappedStatus,
-            };
-          });
-        }
-      } catch (e) {
-        console.error("Failed to fetch events from API:", e);
-      }
-
-      // Read local cache from localStorage
-      let localEvents: EventRow[] = [];
-      try {
-        const saved = localStorage.getItem("app_local_events");
-        if (saved) {
-          localEvents = JSON.parse(saved);
-        }
-      } catch (err) {
-        console.error("Failed to read app_local_events from localStorage:", err);
-      }
-
-      // Merge local and API events, giving local events priority and deduplicating by id
-      const combinedMap = new Map<string, EventRow>();
-      localEvents.forEach((ev) => combinedMap.set(ev.id, ev));
-      apiMapped.forEach((ev) => combinedMap.set(ev.id, ev));
-
-      const combinedWithDynamicStatus = Array.from(combinedMap.values()).map((ev) => {
-        const dynamicStatus = getDynamicEventStatus(ev.startDate, ev.endDate, ev.status);
-        return {
-          ...ev,
-          status: dynamicStatus as EventRow["status"],
-        };
-      });
-
-      setEvents(combinedWithDynamicStatus);
-      setLoading(false);
-    }
     loadEvents();
   }, [user]);
 

@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@/context/AuthContext";
 
 interface SidebarEventGroupProps {
   activeItem?: string;
@@ -12,15 +13,27 @@ export default function SidebarEventGroup({
   activeItem,
   isGroupActive,
 }: SidebarEventGroupProps) {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(true);
 
-  const navLinks = [
-    { label: "Events", href: "/events", activeKeys: ["events-list", "event-management"] },
-    { label: "Add Invitees", href: "/events/1/invitees", activeKeys: ["add-invitees", "invitees-management"] },
-    { label: "Assign System Users", href: "/user-management/assign", activeKeys: ["assign-system-users"] },
-    { label: "Add User", href: "/user-management/add", activeKeys: ["add-user"] },
-    { label: "All Users", href: "/user-management", activeKeys: ["all-users", "user-management"] },
+  const isOrganizer = user?.role === "ORGANIZER";
+  const isSystemUser = user?.role === "SYSTEM_USER";
+
+  // System users do not get the Event Group at all
+  if (isSystemUser) return null;
+
+  // Base navigation links
+  const allNavLinks = [
+    { label: "Events", href: "/events", activeKeys: ["events-list", "event-management"], roles: ["ADMIN", "ORGANIZER"] },
+    { label: "Add Invitees", href: "/events/1/invitees?from=sidebar", activeKeys: ["add-invitees", "invitees-management"], roles: ["ADMIN", "ORGANIZER"] },
+    { label: "Assign System Users", href: "/user-management/assign", activeKeys: ["assign-system-users"], roles: ["ADMIN", "ORGANIZER"] },
+    { label: "Add User", href: "/user-management/add", activeKeys: ["add-user"], roles: ["ADMIN"] },
+    { label: "All Users", href: "/user-management", activeKeys: ["all-users", "user-management"], roles: ["ADMIN"] },
   ];
+
+  const filteredLinks = allNavLinks.filter((item) =>
+    user?.role ? item.roles.includes(user.role) : false
+  );
 
   return (
     <div className="space-y-1">
@@ -57,7 +70,7 @@ export default function SidebarEventGroup({
 
       {isOpen && (
         <div className="pl-6 space-y-1 pt-1">
-          {navLinks.map((item) => {
+          {filteredLinks.map((item) => {
             const isActive = activeItem && item.activeKeys.includes(activeItem);
             return (
               <Link

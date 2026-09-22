@@ -12,8 +12,8 @@ import UserNavDropdown from "@/components/common/UserNavDropdown";
 
 export default function AccountSettingsPage() {
   const { user, updateProfile } = useAuth();
-  const [fullName, setFullName] = useState(user?.fullName || "Admin");
-  const [email, setEmail] = useState(user?.email || "admin@lgpsm.com");
+  const [fullName, setFullName] = useState(user?.fullName || "");
+  const [email, setEmail] = useState(user?.email || "");
   const [password, setPassword] = useState("••••••••••••••••");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(
     (user as any)?.avatarUrl || null

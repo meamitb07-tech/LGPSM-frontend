@@ -54,7 +54,8 @@ export const userService = {
     );
   },
 
-  async getUsers(): Promise<ApiResponse<UserData[]>> {
-    return apiClient<UserData[]>("/api/users/", { method: "GET" }, true);
+  async getUsers(role?: string): Promise<ApiResponse<UserData[]>> {
+    const url = role ? `/api/users?role=${role}` : "/api/users/";
+    return apiClient<UserData[]>(url, { method: "GET" }, true);
   },
 };

@@ -9,6 +9,7 @@ import DateTimePickerModal from "@/components/add-event/modals/DateTimePickerMod
 import EventSubNav from "@/components/EventSubNav";
 
 import UserNavDropdown from "@/components/common/UserNavDropdown";
+import CustomDropdown from "@/components/common/CustomDropdown";
 
 function getFormattedCurrentDateTime(offsetHours: number = 0): string {
   const date = new Date(Date.now() + offsetHours * 3600 * 1000);
@@ -39,70 +40,35 @@ export default function EventSessionsPage() {
   const [activeDateField, setActiveDateField] = useState<"start" | "end">("start");
 
   const fetchSessions = async () => {
+    if (!eventId) return;
+    setIsLoading(true);
     try {
-      setIsLoading(true);
+      const res = await sessionService.getSessions(eventId);
+      if (res?.success && Array.isArray(res.data)) {
+        const mapped = res.data.map((s: any, idx: number) => {
+          const id = s._id || s.id;
+          const startVal = s.schedule?.start || s.startTime;
+          const endVal = s.schedule?.end || s.endTime;
 
-      // Check for locally cached invitees for total count fallback
-      let localInviteesCount = 0;
-      try {
-        const invKeys = [`app_local_invitees_${eventId}`, "app_local_invitees_1", "app_local_invitees"];
-        invKeys.forEach((key) => {
-          const cached = localStorage.getItem(key);
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              localInviteesCount = Math.max(localInviteesCount, parsed.length);
-            }
-          }
-        });
-      } catch (e) { }
-
-      let fetchedApiSessions: any[] = [];
-      try {
-        const res = await sessionService.getSessions(eventId);
-        if (res.success && Array.isArray(res.data)) {
-          fetchedApiSessions = res.data;
-        }
-      } catch (e) { }
-
-      let localSessions: any[] = [];
-      try {
-        const sessKeys = [`app_local_sessions_${eventId}`, "app_local_sessions_1", "app_local_sessions"];
-        sessKeys.forEach((key) => {
-          const cached = localStorage.getItem(key);
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed)) {
-              localSessions.push(...parsed);
-            }
-          }
-        });
-      } catch (e) { }
-
-      const combined = [...fetchedApiSessions, ...localSessions];
-
-      const uniqueMap = new Map();
-      combined.forEach((s, idx) => {
-        const name = s.name || s.title || s.sessionName || `Session ${idx + 1}`;
-        const id = s._id || s.id || name;
-        const count = s.invitesCount ?? s.totalInvitees ?? (s.maxAttendees && s.maxAttendees > 0 ? s.maxAttendees : localInviteesCount);
-
-        if (!uniqueMap.has(name)) {
-          uniqueMap.set(name, {
-            ...s,
+          return {
             _id: id,
             id: id,
-            name: name,
-            invitesCount: count,
-            totalInvitees: count,
-            maxAttendees: count,
-          });
-        }
-      });
-
-      setSessions(Array.from(uniqueMap.values()));
+            name: s.name || `Session ${idx + 1}`,
+            startTime: startVal ? new Date(startVal).toLocaleString() : "N/A",
+            endTime: endVal ? new Date(endVal).toLocaleString() : "",
+            accessControl: s.accessControl || "NO_RESTRICTION",
+            speaker: s.speaker || "-",
+            invitesCount: s.invitesCount ?? s.totalInvitees ?? s.maxAttendees ?? 0,
+            validateAgainstOtherSessions: s.validateAgainstOtherSessions || false,
+          };
+        });
+        setSessions(mapped);
+      } else {
+        setSessions([]);
+      }
     } catch (error) {
-      console.error("Failed to fetch sessions", error);
+      console.error("Failed to fetch sessions from backend API:", error);
+      setSessions([]);
     } finally {
       setIsLoading(false);
     }
@@ -144,44 +110,37 @@ export default function EventSessionsPage() {
     e.preventDefault();
     if (!sessionName.trim()) return;
 
-    const newSessionObj = {
-      id: String(Date.now()),
-      eventId,
-      name: sessionName,
-      title: sessionName,
-      startTime,
-      endTime,
-      accessControl,
-      speaker: "Not Assigned",
-      maxAttendees: 0,
-      invitesCount: keepSameInvitees ? 275 : 0,
-      scannedCount: 0,
-    };
-
-    // Optimistically update state and localStorage
-    const updatedSessions = [...sessions, newSessionObj];
-    setSessions(updatedSessions);
     try {
-      localStorage.setItem(`app_local_sessions_${eventId}`, JSON.stringify(updatedSessions));
-    } catch (e) { }
-
-    // Reset form & close modal immediately so UX is instant
-    setSessionName("");
-    setUploadedFileName("");
-    setIsAddModalOpen(false);
-
-    try {
-      await sessionService.createSession(eventId, {
-        name: sessionName,
+      const res = await sessionService.createSession(eventId, {
+        name: sessionName.trim(),
         startTime,
         endTime,
         accessControl,
-        speaker: "Not Assigned",
-        maxAttendees: 0,
       });
-      fetchSessions();
-    } catch (error) {
-      console.error("Backend session creation warning:", error);
+
+      if (res.success) {
+        setSessionName("");
+        setUploadedFileName("");
+        setIsAddModalOpen(false);
+        await fetchSessions();
+      } else {
+        alert(res.message || "Failed to create session on server.");
+      }
+    } catch (error: any) {
+      alert(error.message || "Error creating session.");
+    }
+  };
+
+  const handleDeleteSession = async (sessionId: string) => {
+    try {
+      const res = await sessionService.deleteSession(sessionId);
+      if (res.success) {
+        await fetchSessions();
+      } else {
+        alert(res.message || "Failed to delete session.");
+      }
+    } catch (e: any) {
+      alert(e.message || "Failed to delete session.");
     }
   };
 
@@ -262,18 +221,19 @@ export default function EventSessionsPage() {
                   <th className="py-3 px-4 font-medium">Total Invitees</th>
                   <th className="py-3 px-4 font-medium">System Users</th>
                   <th className="py-3 px-4 font-medium">Access Control</th>
+                  <th className="py-3 px-4 font-medium text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 text-gray-800">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-gray-500">
+                    <td colSpan={7} className="py-8 text-center text-gray-500">
                       Loading...
                     </td>
                   </tr>
                 ) : filteredSessions.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-gray-500">
+                    <td colSpan={7} className="py-8 text-center text-gray-500">
                       No sessions found. Add a session to get started.
                     </td>
                   </tr>
@@ -290,6 +250,16 @@ export default function EventSessionsPage() {
                       </td>
                       <td className="py-4 px-4 font-normal text-gray-800">{sess.speaker || "-"}</td>
                       <td className="py-4 px-4 font-normal text-gray-700">{sess.accessControl || "No Restriction"}</td>
+                      <td className="py-4 px-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSession(sess._id || sess.id)}
+                          className="text-rose-500 hover:text-rose-700 font-semibold cursor-pointer text-xs"
+                          title="Delete Session"
+                        >
+                          Delete
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -395,14 +365,15 @@ export default function EventSessionsPage() {
                     <span>Access Control</span>
                     <span className="text-gray-400 text-[10px]">ⓘ</span>
                   </label>
-                  <select
+                  <CustomDropdown
                     value={accessControl}
-                    onChange={(e) => setAccessControl(e.target.value)}
-                    className="w-full p-2 border border-gray-200 rounded-md text-gray-800 text-[11px] bg-white focus:outline-none focus:border-[#FF5B22]"
-                  >
-                    <option value="No Restrictions">No Restrictions</option>
-                    <option value="Only Once">Only Once</option>
-                  </select>
+                    onChange={(val) => setAccessControl(val)}
+                    options={[
+                      { value: "No Restrictions", label: "No Restrictions" },
+                      { value: "Only Once", label: "Only Once" },
+                    ]}
+                    placeholder="Access Control"
+                  />
                 </div>
               </div>
 
@@ -418,14 +389,17 @@ export default function EventSessionsPage() {
                 </label>
 
                 {keepSameInvitees && (
-                  <select
-                    value={selectedSameSession}
-                    onChange={(e) => setSelectedSameSession(e.target.value)}
-                    className="px-3 py-1 border border-gray-200 rounded-md text-xs text-gray-700 bg-white"
-                  >
-                    <option value="">-select-</option>
-                    <option value="Entry Session">Entry Session</option>
-                  </select>
+                  <div className="w-36">
+                    <CustomDropdown
+                      value={selectedSameSession || "-select-"}
+                      onChange={(val) => setSelectedSameSession(val)}
+                      options={[
+                        { value: "-select-", label: "-select-" },
+                        { value: "Entry Session", label: "Entry Session" },
+                      ]}
+                      placeholder="-select-"
+                    />
+                  </div>
                 )}
               </div>
 

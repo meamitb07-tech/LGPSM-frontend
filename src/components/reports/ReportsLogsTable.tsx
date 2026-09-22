@@ -2,16 +2,29 @@
 
 import React from "react";
 import { InviteeLog, AccessLog, SessionReport } from "@/types/reports";
+import { CheckInRecord } from "@/services/checkInService";
 
 interface ReportsLogsTableProps {
-  activeTab: "invitees" | "access" | "sessions";
-  setActiveTab: (tab: "invitees" | "access" | "sessions") => void;
+  activeTab: "checkins" | "invitees" | "access" | "sessions";
+  setActiveTab: (tab: "checkins" | "invitees" | "access" | "sessions") => void;
   tableSearch: string;
   setTableSearch: (val: string) => void;
   onDownloadCSV: () => void;
-  inviteeLogs: InviteeLog[];
-  accessLogs: AccessLog[];
-  sessionsReport: SessionReport[];
+  // Real check-in props
+  checkInLogs?: CheckInRecord[];
+  loadingCheckIns?: boolean;
+  page?: number;
+  limit?: number;
+  total?: number;
+  totalPages?: number;
+  onPageChange?: (newPage: number) => void;
+  methodFilter?: string;
+  onMethodFilterChange?: (method: string) => void;
+  onOpenCheckInModal?: () => void;
+  // Legacy reports props
+  inviteeLogs?: InviteeLog[];
+  accessLogs?: AccessLog[];
+  sessionsReport?: SessionReport[];
 }
 
 export default function ReportsLogsTable({
@@ -20,88 +33,248 @@ export default function ReportsLogsTable({
   tableSearch,
   setTableSearch,
   onDownloadCSV,
-  inviteeLogs,
-  accessLogs,
-  sessionsReport,
+  checkInLogs = [],
+  loadingCheckIns = false,
+  page = 1,
+  limit = 20,
+  total = 0,
+  totalPages = 1,
+  onPageChange,
+  methodFilter = "",
+  onMethodFilterChange,
+  onOpenCheckInModal,
+  inviteeLogs = [],
+  accessLogs = [],
+  sessionsReport = [],
 }: ReportsLogsTableProps) {
   return (
     <div className="bg-white border border-gray-200 rounded-md shadow-2xs overflow-hidden">
       {/* Tabs Header */}
-      <div className="border-b border-gray-200 px-6 pt-4 flex items-center gap-8 text-xs">
-        <button
-          type="button"
-          onClick={() => setActiveTab("invitees")}
-          className={`pb-3 font-semibold transition-colors cursor-pointer relative ${activeTab === "invitees"
-              ? "text-gray-900 border-b-2 border-[#FF5B22]"
-              : "text-gray-500 hover:text-gray-800"
+      <div className="border-b border-gray-200 px-6 pt-4 flex items-center justify-between gap-4 text-xs">
+        <div className="flex items-center gap-8">
+          <button
+            type="button"
+            onClick={() => setActiveTab("checkins")}
+            className={`pb-3 font-semibold transition-colors cursor-pointer relative ${
+              activeTab === "checkins"
+                ? "text-gray-900 border-b-2 border-[#FF5B22]"
+                : "text-gray-500 hover:text-gray-800"
             }`}
-        >
-          Invitee Logs
-        </button>
+          >
+            Check-In Logs
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("access")}
-          className={`pb-3 font-semibold transition-colors cursor-pointer relative ${activeTab === "access"
-              ? "text-gray-900 border-b-2 border-[#FF5B22]"
-              : "text-gray-500 hover:text-gray-800"
+          <button
+            type="button"
+            onClick={() => setActiveTab("invitees")}
+            className={`pb-3 font-semibold transition-colors cursor-pointer relative ${
+              activeTab === "invitees"
+                ? "text-gray-900 border-b-2 border-[#FF5B22]"
+                : "text-gray-500 hover:text-gray-800"
             }`}
-        >
-          Access Logs
-        </button>
+          >
+            Invitee List
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("sessions")}
-          className={`pb-3 font-semibold transition-colors cursor-pointer relative ${activeTab === "sessions"
-              ? "text-gray-900 border-b-2 border-[#FF5B22]"
-              : "text-gray-500 hover:text-gray-800"
+          <button
+            type="button"
+            onClick={() => setActiveTab("access")}
+            className={`pb-3 font-semibold transition-colors cursor-pointer relative ${
+              activeTab === "access"
+                ? "text-gray-900 border-b-2 border-[#FF5B22]"
+                : "text-gray-500 hover:text-gray-800"
             }`}
-        >
-          Sessions
-        </button>
+          >
+            Access Logs
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("sessions")}
+            className={`pb-3 font-semibold transition-colors cursor-pointer relative ${
+              activeTab === "sessions"
+                ? "text-gray-900 border-b-2 border-[#FF5B22]"
+                : "text-gray-500 hover:text-gray-800"
+            }`}
+          >
+            Sessions
+          </button>
+        </div>
+
+        {/* Check-In Action Button */}
+        {onOpenCheckInModal && (
+          <button
+            type="button"
+            onClick={onOpenCheckInModal}
+            className="mb-2 px-3 py-1.5 bg-[#FF5B22] hover:bg-[#E04B16] text-white font-bold text-xs rounded-md shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Perform Check-In</span>
+          </button>
+        )}
       </div>
 
-      {/* Table Search & Actions Bar */}
+      {/* Table Filters & Actions Bar */}
       <div className="p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-sm">
-            <svg
-              className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          <div className="flex items-center gap-3 flex-1 max-w-lg">
+            <div className="relative flex-1">
+              <svg
+                className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search logs..."
+                value={tableSearch}
+                onChange={(e) => setTableSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-md text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#FF5B22] transition-colors"
               />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search..."
-              value={tableSearch}
-              onChange={(e) => setTableSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-md text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#FF5B22] transition-colors"
-            />
+            </div>
+
+            {/* Method filter dropdown for checkins tab */}
+            {activeTab === "checkins" && onMethodFilterChange && (
+              <select
+                value={methodFilter}
+                onChange={(e) => onMethodFilterChange(e.target.value)}
+                className="px-3 py-2 bg-white border border-gray-200 rounded-md text-xs text-gray-700 font-medium focus:outline-none focus:border-[#FF5B22]"
+              >
+                <option value="">All Methods</option>
+                <option value="QR">QR Code</option>
+                <option value="MANUAL">Manual</option>
+              </select>
+            )}
           </div>
 
           <button
             type="button"
             onClick={onDownloadCSV}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#FF5B22] hover:text-[#E04B16] cursor-pointer"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#FF5B22] hover:text-[#E04B16] cursor-pointer shrink-0"
           >
             <svg className="w-4 h-4 text-[#FF5B22]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            <span>Download List</span>
+            <span>Download CSV</span>
           </button>
         </div>
 
         {/* Table Render */}
         <div className="overflow-x-auto">
+          {/* REAL CHECK-IN LOGS TAB */}
+          {activeTab === "checkins" && (
+            <div>
+              {loadingCheckIns ? (
+                <div className="py-12 text-center text-xs text-gray-500 flex justify-center items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-[#FF5B22] border-t-transparent rounded-full animate-spin" />
+                  <span>Loading real check-in records...</span>
+                </div>
+              ) : checkInLogs.length === 0 ? (
+                <div className="py-12 text-center text-xs text-gray-500">
+                  No check-in records found for this event/session filter.
+                </div>
+              ) : (
+                <table className="w-full text-left text-xs whitespace-nowrap">
+                  <thead>
+                    <tr className="border-b border-gray-200 text-gray-500 font-medium text-[11px]">
+                      <th className="py-3 px-4 font-medium">Invitee</th>
+                      <th className="py-3 px-4 font-medium">Session</th>
+                      <th className="py-3 px-4 font-medium">Method</th>
+                      <th className="py-3 px-4 font-medium">Check-In Time</th>
+                      <th className="py-3 px-4 font-medium">Checked In By</th>
+                      <th className="py-3 px-4 font-medium">RSVP</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 text-gray-800">
+                    {checkInLogs.map((log) => {
+                      const inviteeObj = typeof log.invitee === "object" ? log.invitee : null;
+                      const sessionObj = typeof log.session === "object" ? log.session : null;
+                      const checkedInByObj = typeof log.checkedInBy === "object" ? log.checkedInBy : null;
+
+                      const inviteeName = inviteeObj?.name || "Attendee";
+                      const inviteeContact = inviteeObj?.email || inviteeObj?.mobile || "";
+                      const sessionName = sessionObj?.name || "Event Gate";
+
+                      const method = log.checkInMethod || "QR";
+                      const checkInTime = log.checkInAt ? new Date(log.checkInAt).toLocaleString() : "—";
+                      const staffName = checkedInByObj?.fullName || checkedInByObj?.email || String(log.checkedInBy || "Staff");
+                      const rsvp = inviteeObj?.rsvpStatus || "CONFIRMED";
+
+                      return (
+                        <tr key={log._id} className="hover:bg-gray-50/80 transition-colors">
+                          <td className="py-4 px-4 font-semibold text-gray-900">
+                            <div>{inviteeName}</div>
+                            {inviteeContact && (
+                              <div className="text-[11px] text-gray-400 font-normal">{inviteeContact}</div>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 font-medium text-gray-700">{sessionName}</td>
+                          <td className="py-4 px-4">
+                            {method === "QR" ? (
+                              <span className="bg-purple-100 text-purple-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase">
+                                QR SCAN
+                              </span>
+                            ) : (
+                              <span className="bg-blue-100 text-blue-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase">
+                                MANUAL
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-gray-600 font-medium">{checkInTime}</td>
+                          <td className="py-4 px-4 text-gray-700 font-medium">{staffName}</td>
+                          <td className="py-4 px-4">
+                            <span className="bg-emerald-100/70 text-emerald-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                              {rsvp}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+
+              {/* REAL BACKEND PAGINATION CONTROLS */}
+              {totalPages > 1 && onPageChange && (
+                <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-600">
+                  <div>
+                    Showing page <span className="font-bold text-gray-900">{page}</span> of{" "}
+                    <span className="font-bold text-gray-900">{totalPages}</span> ({total} total records)
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={page <= 1}
+                      onClick={() => onPageChange(page - 1)}
+                      className="px-3 py-1 bg-white border border-gray-200 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-white cursor-pointer"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      type="button"
+                      disabled={page >= totalPages}
+                      onClick={() => onPageChange(page + 1)}
+                      className="px-3 py-1 bg-white border border-gray-200 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-white cursor-pointer"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* INVITEE LOGS TAB */}
           {activeTab === "invitees" && (
             <table className="w-full text-left text-xs whitespace-nowrap">
               <thead>
@@ -195,6 +368,7 @@ export default function ReportsLogsTable({
             </table>
           )}
 
+          {/* ACCESS LOGS TAB */}
           {activeTab === "access" && (
             <table className="w-full text-left text-xs whitespace-nowrap">
               <thead>
@@ -228,6 +402,7 @@ export default function ReportsLogsTable({
             </table>
           )}
 
+          {/* SESSIONS TAB */}
           {activeTab === "sessions" && (
             <div className="space-y-3">
               <h4 className="text-xs font-bold text-gray-900">Sessions</h4>

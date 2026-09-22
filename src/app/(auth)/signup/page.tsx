@@ -29,6 +29,28 @@ export default function SignupPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
+  // Read mode from query param on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const modeParam = params.get("mode");
+      if (modeParam === "user" || modeParam === "admin") {
+        setAuthMode(modeParam);
+      }
+    }
+  }, []);
+
+  const handleModeSwitch = (mode: "admin" | "user") => {
+    setAuthMode(mode);
+    setErrorMessage("");
+    setSuccessMessage("");
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("mode", mode);
+      window.history.replaceState(null, "", url.pathname + url.search);
+    }
+  };
+
   useEffect(() => {
     if (authMode === "user") {
       const ctx = gsap.context(() => {
@@ -75,19 +97,27 @@ export default function SignupPage() {
     setIsSubmitting(true);
 
     try {
+      const targetRole = authMode === "admin" ? "ADMIN" : "ORGANIZER";
       const res = await register({
         fullName,
         email,
         password,
+        role: targetRole,
         ...(phone.trim() ? { phone: phone.trim() } : {}),
       });
+
       if (res.success) {
         if (typeof window !== "undefined") {
           sessionStorage.setItem("show_dashboard_popup", "true");
         }
-        setSuccessMessage("Account created successfully! Redirecting to dashboard...");
+        setSuccessMessage("Account created successfully! Redirecting...");
+        const role = res.data?.user?.role || targetRole;
         setTimeout(() => {
-          router.push("/dashboard");
+          if (role === "SYSTEM_USER") {
+            router.push("/events");
+          } else {
+            router.push("/dashboard");
+          }
         }, 800);
       } else {
         setErrorMessage(res.message || "Registration failed. Please check your inputs.");
@@ -106,23 +136,25 @@ export default function SignupPage() {
         <div className="bg-gray-200/80 p-1 rounded-full flex items-center gap-1 shadow-2xs border border-gray-300/60">
           <button
             type="button"
-            onClick={() => setAuthMode("admin")}
-            className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${authMode === "admin"
+            onClick={() => handleModeSwitch("admin")}
+            className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+              authMode === "admin"
                 ? "bg-[#FF5B22] text-white shadow-xs"
                 : "text-gray-600 hover:text-gray-900"
-              }`}
+            }`}
           >
-            Super Admin Sign Up
+            Admin
           </button>
           <button
             type="button"
-            onClick={() => setAuthMode("user")}
-            className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${authMode === "user"
+            onClick={() => handleModeSwitch("user")}
+            className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+              authMode === "user"
                 ? "bg-[#FF5B22] text-white shadow-xs"
                 : "text-gray-600 hover:text-gray-900"
-              }`}
+            }`}
           >
-            User / Organizer Register
+            User / Organizer
           </button>
         </div>
       </div>
@@ -130,7 +162,7 @@ export default function SignupPage() {
       {/* ── MODE 1: SUPER ADMIN CENTRED CARD ── */}
       {authMode === "admin" ? (
         <div className="flex-1 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-8 sm:p-10 shadow-xs border border-gray-100/80 max-w-md w-full space-y-6">
+          <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-xs border border-gray-300 max-w-md w-full space-y-2">
             {/* Brand Logo Header */}
             <div className="text-center">
               <Link href="/" className="inline-block">
@@ -140,15 +172,15 @@ export default function SignupPage() {
                   width={180}
                   height={50}
                   priority
-                  className="h-10 w-auto mx-auto object-contain"
+                  className="h-20 w-auto mx-auto object-contain"
                 />
               </Link>
             </div>
 
             {/* Title & Subtitle */}
-            <div className="text-center space-y-1">
+            <div className="text-center space-y-2">
               <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
-                Super Admin Sign Up
+                Admin Sign Up
               </h1>
               <p className="text-xs text-gray-400 font-medium">
                 Create a new Super Admin account to access Dashboard
@@ -266,7 +298,7 @@ export default function SignupPage() {
             {/* Bottom Link to Signin */}
             <div className="text-center pt-2 text-xs text-gray-400">
               Already have an admin account?{" "}
-              <Link href="/signin" className="text-[#FF5B22] font-semibold hover:underline">
+              <Link href="/signin?mode=admin" className="text-[#FF5B22] font-semibold hover:underline">
                 Log in
               </Link>
             </div>
@@ -490,7 +522,7 @@ export default function SignupPage() {
               {/* Bottom Sign in Link */}
               <div className="text-center pt-3 text-xs text-gray-500">
                 Already registered?{" "}
-                <Link href="/signin" className="text-[#FF5B22] font-semibold underline">
+                <Link href="/signin?mode=user" className="text-[#FF5B22] font-semibold underline">
                   Sign in
                 </Link>
               </div>

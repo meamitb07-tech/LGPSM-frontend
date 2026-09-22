@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@/context/AuthContext";
 
 interface SidebarSettingsGroupProps {
   activeItem?: string;
@@ -12,35 +13,48 @@ export default function SidebarSettingsGroup({
   activeItem,
   isGroupActive,
 }: SidebarSettingsGroupProps) {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(true);
 
-  const subItems = [
+  // System users have their settings link rendered directly in main sidebar
+  if (user?.role === "SYSTEM_USER") return null;
+
+  const allSubItems = [
     {
       label: "Template Settings",
       href: "/settings/template",
       activeKeys: ["template-settings", "settings"],
+      roles: ["ADMIN", "ORGANIZER"],
     },
     {
       label: "Event Settings",
       href: "/settings/event",
       activeKeys: ["event-settings"],
+      roles: ["ADMIN", "ORGANIZER"],
     },
     {
       label: "Price Rate Settings",
       href: "/settings/price-rate",
       activeKeys: ["price-rate-settings"],
+      roles: ["ADMIN", "ORGANIZER"],
     },
     {
       label: "Notification Settings",
       href: "/settings/notification",
       activeKeys: ["notification-settings", "notifications-settings"],
+      roles: ["ADMIN", "ORGANIZER"],
     },
     {
       label: "Account Settings",
       href: "/settings/account",
       activeKeys: ["account-settings"],
+      roles: ["ADMIN", "ORGANIZER"],
     },
   ];
+
+  const filteredSubItems = allSubItems.filter((item) =>
+    user?.role ? item.roles.includes(user.role) : false
+  );
 
   return (
     <div className="space-y-1">
@@ -53,7 +67,6 @@ export default function SidebarSettingsGroup({
         }`}
       >
         <div className="flex items-center gap-3">
-          {/* Crisp Classic Settings Gear / Cogwheel Icon */}
           <svg
             className={`w-4 h-4 ${isGroupActive ? "text-[#FF5B22]" : "text-gray-400"}`}
             fill="none"
@@ -89,7 +102,7 @@ export default function SidebarSettingsGroup({
 
       {isOpen && (
         <div className="pl-6 space-y-1 pt-1">
-          {subItems.map((item) => {
+          {filteredSubItems.map((item) => {
             const isActive = activeItem && item.activeKeys.includes(activeItem);
             return (
               <Link

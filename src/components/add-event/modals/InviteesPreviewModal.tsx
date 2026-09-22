@@ -17,42 +17,63 @@ interface InviteesPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave?: (updatedList: InviteeRow[]) => void;
+  onDelete?: (id: string) => void | Promise<void>;
+  onEdit?: (updated: InviteeRow) => void | Promise<void>;
   inviteesList?: InviteeRow[];
   sessionName?: string;
+  sessionsOptions?: { id: string; name: string }[];
 }
-
-const DEFAULT_INVITEES: InviteeRow[] = [
-  { id: "01", name: "Moloy Roy", email: "diya.patel@yahoo.com", phone: "+919062906466" },
-  { id: "02", name: "Chanchal Roy", email: "meera.jain@yahoo.com", phone: "+918442128334" },
-  { id: "03", name: "Souvik K", email: "vihaan.chopra@outlook.com", phone: "+916787249381" },
-  { id: "04", name: "Subhendu Bhattacharjee", email: "ishaan.jain@hotmail.com", phone: "+919474963438" },
-  { id: "05", name: "Sayan Ghosh", email: "vihaan.jain@hotmail.com", phone: "+916327018843" },
-  { id: "06", name: "Sharmila Poddar", email: "arjun.verma@outlook.com", phone: "+919616263073" },
-  { id: "07", name: "Online User A", email: "user.a@example.com", phone: "+919876543210" },
-  { id: "08", name: "Online User B", email: "user.b@example.com", phone: "+919876543211" },
-];
 
 export default function InviteesPreviewModal({
   isOpen,
   onClose,
   onSave,
+  onDelete,
+  onEdit,
   inviteesList = [],
-  sessionName = "Session 1 - Entry Session",
+  sessionName,
+  sessionsOptions = [],
 }: InviteesPreviewModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
 
   const [list, setList] = useState<InviteeRow[]>(inviteesList);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedSession, setSelectedSession] = useState(sessionName);
   const [editingInvitee, setEditingInvitee] = useState<InviteeRow | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (isOpen && inviteesList) {
-      setList(inviteesList);
+  const dropdownOptions = React.useMemo(() => {
+    const opts: { value: string; label: string }[] = [
+      { value: "all", label: "All Sessions" },
+    ];
+    if (sessionsOptions && sessionsOptions.length > 0) {
+      sessionsOptions.forEach((s) => {
+        opts.push({ value: s.id, label: s.name });
+      });
+    } else {
+      opts.push(
+        { value: "entry", label: "Session 1 - Entry Session" },
+        { value: "lunch", label: "Session 2 - Lunch Session" }
+      );
     }
-  }, [isOpen]);
+    return opts;
+  }, [sessionsOptions]);
+
+  const [selectedSession, setSelectedSession] = useState<string>("all");
+
+  useEffect(() => {
+    if (isOpen) {
+      if (inviteesList) setList(inviteesList);
+      const matched = dropdownOptions.find(
+        (opt) => opt.value === selectedSession || (sessionName && opt.label.toLowerCase().includes(sessionName.toLowerCase()))
+      );
+      if (matched) {
+        setSelectedSession(matched.value);
+      } else if (dropdownOptions.length > 0) {
+        setSelectedSession(dropdownOptions[0].value);
+      }
+    }
+  }, [isOpen, inviteesList, sessionsOptions, sessionName, dropdownOptions]);
 
   useEffect(() => {
     if (isOpen && overlayRef.current && modalRef.current) {
@@ -76,14 +97,21 @@ export default function InviteesPreviewModal({
       item.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleSaveEdit = (updated: InviteeRow) => {
+  const handleSaveEdit = async (updated: InviteeRow) => {
     setList(list.map((item) => (item.id === updated.id ? updated : item)));
+    if (onEdit) {
+      await onEdit(updated);
+    }
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (deletingId) {
-      setList(list.filter((item) => item.id !== deletingId));
+      const targetId = deletingId;
+      setList(list.filter((item) => item.id !== targetId));
       setDeletingId(null);
+      if (onDelete) {
+        await onDelete(targetId);
+      }
     }
   };
 
@@ -126,14 +154,11 @@ export default function InviteesPreviewModal({
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="flex-1 px-3.5 py-2.5 bg-transparent text-xs font-medium text-gray-800 placeholder:text-gray-400 focus:outline-none"
               />
-              <div className="border-l border-gray-200 px-2 py-1 bg-white flex items-center shrink-0 w-48">
+              <div className="border-l border-gray-200 px-2 py-1 bg-white flex items-center shrink-0 w-52">
                 <CustomDropdown
                   value={selectedSession}
                   onChange={(val) => setSelectedSession(val)}
-                  options={[
-                    { value: "Session 1 - Entry Session", label: "Session 1 - Entry Session" },
-                    { value: "Session 2 - Lunch Session", label: "Session 2 - Lunch Session" },
-                  ]}
+                  options={dropdownOptions}
                   placeholder="Select Session"
                 />
               </div>

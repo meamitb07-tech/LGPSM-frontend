@@ -71,9 +71,16 @@ export default function UserNavDropdown() {
       {/* Dropdown Menu */}
       {isOpen && (
         <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-xl py-1.5 z-50 animate-in fade-in duration-150">
-          {/* User Email Header inside Dropdown */}
+          {/* User Email & Role Header inside Dropdown */}
           <div className="px-4 py-2 border-b border-gray-100">
-            <p className="text-xs font-bold text-gray-900 truncate">{displayName}</p>
+            <div className="flex items-center justify-between gap-1">
+              <p className="text-xs font-bold text-gray-900 truncate">{displayName}</p>
+              {user?.role && (
+                <span className="text-[9px] font-bold text-[#FF5B22] bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded uppercase shrink-0">
+                  {user.role}
+                </span>
+              )}
+            </div>
             {user?.email && (
               <p className="text-[11px] text-gray-500 truncate mt-0.5">{user.email}</p>
             )}

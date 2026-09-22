@@ -78,35 +78,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateProfile = async (payload: UpdateProfilePayload): Promise<ApiResponse> => {
-    let res: ApiResponse = { success: false };
-    try {
-      res = await userService.updateProfile(payload);
-    } catch { }
-
-    const current = user || tokenStorage.getUser() || {
-      _id: "usr_admin",
-      fullName: "Admin",
-      email: "admin@lgpsm.com",
-    };
-
-    const updatedUser = {
-      ...current,
-      ...(payload.fullName ? { fullName: payload.fullName } : {}),
-      ...(payload.email ? { email: payload.email } : {}),
-      ...(payload.phone ? { phone: payload.phone } : {}),
-      ...(payload.avatarUrl !== undefined ? { avatarUrl: payload.avatarUrl } : {}),
-    };
-
+    const res = await userService.updateProfile(payload);
     if (res.success && res.data) {
-      const merged = { ...updatedUser, ...res.data };
-      setUser(merged);
-      tokenStorage.setUser(merged);
-    } else {
-      setUser(updatedUser);
-      tokenStorage.setUser(updatedUser);
+      setUser(res.data);
+      tokenStorage.setUser(res.data);
     }
-
-    return { success: true, data: updatedUser };
+    return res;
   };
 
   return (

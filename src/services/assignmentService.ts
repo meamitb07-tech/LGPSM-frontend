@@ -1,79 +1,127 @@
 import { apiClient, ApiResponse } from "./apiClient";
 
 export interface AssignmentData {
-  _id?: string;
-  id?: string;
-  eventId: string;
-  systemUserId: string | { _id: string; fullName: string; email: string };
-  sessionIds: string[] | { _id: string; name: string }[];
-  assignedBy?: string;
+  _id: string;
+  userId: {
+    _id: string;
+    fullName?: string;
+    name?: string;
+    email?: string;
+    phone?: string;
+    role?: string;
+  } | string;
+  eventId: {
+    _id: string;
+    title?: string;
+    status?: string;
+    format?: string;
+    location?: string;
+    schedule?: any;
+  } | string;
+  sessionIds: ({
+    _id: string;
+    name?: string;
+    schedule?: any;
+  } | string)[];
+  assignedBy?: {
+    _id: string;
+    fullName?: string;
+    email?: string;
+  } | string;
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface CreateAssignmentPayload {
-  userId?: string;
-  systemUserId?: string;
+  userId: string;
+  sessionIds: string[];
+}
+
+export interface UpdateAssignmentPayload {
   sessionIds: string[];
 }
 
 export const assignmentService = {
   /**
-   * Create assignment (Assign sessions to a system user)
+   * Create assignment for an event
    * POST /api/v1/events/:eventId/assignments
    */
   async createAssignment(
     eventId: string,
     payload: CreateAssignmentPayload
   ): Promise<ApiResponse<AssignmentData>> {
-    const userId = payload.userId || payload.systemUserId || "";
-    return apiClient<AssignmentData>(`/api/v1/events/${eventId}/assignments`, {
-      method: "POST",
-      body: JSON.stringify({ userId, sessionIds: payload.sessionIds }),
-    }, true);
+    return apiClient<AssignmentData>(
+      `/api/v1/events/${eventId}/assignments`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      true
+    );
   },
 
   /**
-   * List assignments for event
+   * Get assignments for an event
    * GET /api/v1/events/:eventId/assignments
    */
+  async getAssignmentsByEvent(eventId: string): Promise<ApiResponse<AssignmentData[]>> {
+    return apiClient<AssignmentData[]>(
+      `/api/v1/events/${eventId}/assignments`,
+      {
+        method: "GET",
+      },
+      true
+    );
+  },
+
+  /** Alias for getAssignmentsByEvent */
   async getEventAssignments(eventId: string): Promise<ApiResponse<AssignmentData[]>> {
-    return apiClient<AssignmentData[]>(`/api/v1/events/${eventId}/assignments`, {
-      method: "GET",
-    }, true);
+    return this.getAssignmentsByEvent(eventId);
   },
 
   /**
-   * Update assignment
+   * Get my assignments (for logged in system user)
+   * GET /api/v1/users/me/assignments
+   */
+  async getMyAssignments(): Promise<ApiResponse<AssignmentData[]>> {
+    return apiClient<AssignmentData[]>(
+      `/api/v1/users/me/assignments`,
+      {
+        method: "GET",
+      },
+      true
+    );
+  },
+
+  /**
+   * Update assignment (update assigned sessions)
    * PATCH /api/v1/assignments/:assignmentId
    */
   async updateAssignment(
     assignmentId: string,
-    payload: Partial<CreateAssignmentPayload>
+    payload: UpdateAssignmentPayload
   ): Promise<ApiResponse<AssignmentData>> {
-    return apiClient<AssignmentData>(`/api/v1/assignments/${assignmentId}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    }, true);
+    return apiClient<AssignmentData>(
+      `/api/v1/assignments/${assignmentId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      },
+      true
+    );
   },
 
   /**
-   * Delete assignment
+   * Delete assignment (unassign)
    * DELETE /api/v1/assignments/:assignmentId
    */
-  async deleteAssignment(assignmentId: string): Promise<ApiResponse> {
-    return apiClient(`/api/v1/assignments/${assignmentId}`, {
-      method: "DELETE",
-    }, true);
-  },
-
-  /**
-   * Get assignments for currently logged-in SYSTEM_USER
-   * GET /api/v1/users/me/assignments
-   */
-  async getMyAssignments(): Promise<ApiResponse<AssignmentData[]>> {
-    return apiClient<AssignmentData[]>("/api/v1/users/me/assignments", {
-      method: "GET",
-    }, true);
+  async deleteAssignment(assignmentId: string): Promise<ApiResponse<{ assignmentId: string; deleted: boolean }>> {
+    return apiClient<{ assignmentId: string; deleted: boolean }>(
+      `/api/v1/assignments/${assignmentId}`,
+      {
+        method: "DELETE",
+      },
+      true
+    );
   },
 };

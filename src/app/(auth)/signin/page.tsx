@@ -25,6 +25,27 @@ export default function SigninPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
+  // Read mode from query param on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const modeParam = params.get("mode");
+      if (modeParam === "user" || modeParam === "admin") {
+        setAuthMode(modeParam);
+      }
+    }
+  }, []);
+
+  const handleModeSwitch = (mode: "admin" | "user") => {
+    setAuthMode(mode);
+    setErrorMessage("");
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("mode", mode);
+      window.history.replaceState(null, "", url.pathname + url.search);
+    }
+  };
+
   useEffect(() => {
     if (authMode === "user") {
       const ctx = gsap.context(() => {
@@ -59,12 +80,18 @@ export default function SigninPage() {
     setIsSubmitting(true);
 
     try {
-      const res = await login({ email, password });
+      const targetRole = authMode === "admin" ? "ADMIN" : undefined;
+      const res = await login({ email, password, role: targetRole });
       if (res.success) {
         if (typeof window !== "undefined") {
           sessionStorage.setItem("show_dashboard_popup", "true");
         }
-        router.push("/dashboard");
+        const role = res.data?.user?.role;
+        if (role === "SYSTEM_USER") {
+          router.push("/events");
+        } else {
+          router.push("/dashboard");
+        }
       } else {
         setErrorMessage(res.message || "Invalid credentials. Please check your email and password.");
       }
@@ -82,31 +109,33 @@ export default function SigninPage() {
         <div className="bg-gray-200/80 p-1 rounded-full flex items-center gap-1 shadow-2xs border border-gray-300/60">
           <button
             type="button"
-            onClick={() => setAuthMode("admin")}
-            className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${authMode === "admin"
+            onClick={() => handleModeSwitch("admin")}
+            className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+              authMode === "admin"
                 ? "bg-[#FF5B22] text-white shadow-xs"
                 : "text-gray-600 hover:text-gray-900"
-              }`}
+            }`}
           >
-            Super Admin Log In
+            Admin
           </button>
           <button
             type="button"
-            onClick={() => setAuthMode("user")}
-            className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${authMode === "user"
+            onClick={() => handleModeSwitch("user")}
+            className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+              authMode === "user"
                 ? "bg-[#FF5B22] text-white shadow-xs"
                 : "text-gray-600 hover:text-gray-900"
-              }`}
+            }`}
           >
-            User / Organizer Log In
+            User / Organizer
           </button>
         </div>
       </div>
 
-      {/* ── MODE 1: SUPER ADMIN CENTRED CARD (Reference Screenshot) ── */}
+      {/* ── MODE 1: SUPER ADMIN CENTRED CARD ── */}
       {authMode === "admin" ? (
         <div className="flex-1 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-8 sm:p-10 shadow-xs border border-gray-100/80 max-w-md w-full space-y-6">
+          <div className="bg-white rounded-xl p-8 sm:p-10 shadow-xs border border-gray-300 max-w-md w-full space-y-6">
             {/* Brand Logo Header */}
             <div className="text-center">
               <Link href="/" className="inline-block">
@@ -124,7 +153,7 @@ export default function SigninPage() {
             {/* Title & Subtitle */}
             <div className="text-center space-y-1">
               <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
-                Super Admin Log In
+                Admin Log In
               </h1>
               <p className="text-xs text-gray-400 font-medium">
                 Welcome back! Login to Dashboard
@@ -220,14 +249,14 @@ export default function SigninPage() {
             {/* Bottom Link to Signup */}
             <div className="text-center pt-2 text-xs text-gray-400">
               Need a Super Admin account?{" "}
-              <Link href="/signup" className="text-[#FF5B22] font-semibold hover:underline">
+              <Link href="/signup?mode=admin" className="text-[#FF5B22] font-semibold hover:underline">
                 Sign up
               </Link>
             </div>
           </div>
         </div>
       ) : (
-        /* ── MODE 2: USER / ORGANIZER SPLIT HERO MODE (Original Hero Layout) ── */
+        /* ── MODE 2: USER / ORGANIZER SPLIT HERO MODE ── */
         <div className="flex-1 flex bg-white font-[family-name:var(--font-space-grotesk)] relative overflow-hidden">
           {/* Left Hero Side (Orange Panel) */}
           <div className="hidden lg:flex w-[40%] xl:w-[42%] bg-[#FF5B22] items-center relative shrink-0 h-full">
@@ -389,7 +418,7 @@ export default function SigninPage() {
               {/* Bottom Sign up Link */}
               <div className="text-center pt-8 text-xs text-gray-500">
                 Don&apos;t have an account?{" "}
-                <Link href="/signup" className="text-[#FF5B22] font-semibold hover:underline">
+                <Link href="/signup?mode=user" className="text-[#FF5B22] font-semibold hover:underline">
                   Sign up
                 </Link>
               </div>

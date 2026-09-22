@@ -1,10 +1,16 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { sessionService } from "@/services/sessionService";
 import { inviteeService } from "@/services/inviteeService";
 import { assignmentService } from "@/services/assignmentService";
+
+export function notifyDbUpdate() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("lgpsm-db-update"));
+  }
+}
 
 interface EventSubNavProps {
   eventId: string;
@@ -25,101 +31,56 @@ export default function EventSubNav({
   const [inviteesCount, setInviteesCount] = useState<number>(propInviteesCount ?? 0);
   const [assignmentsCount, setAssignmentsCount] = useState<number>(propAssignmentsCount ?? 0);
 
-  useEffect(() => {
-    if (propSessionsCount !== undefined) setSessionsCount(propSessionsCount);
-    if (propInviteesCount !== undefined) setInviteesCount(propInviteesCount);
-    if (propAssignmentsCount !== undefined) setAssignmentsCount(propAssignmentsCount);
-  }, [propSessionsCount, propInviteesCount, propAssignmentsCount]);
+  const fetchUnifiedCounts = useCallback(async () => {
+    if (!eventId || eventId === "1" || eventId === "select") return;
 
-  useEffect(() => {
-    if (!eventId) return;
+    try {
+      const [sessRes, invRes, assignRes] = await Promise.all([
+        sessionService.getSessions(eventId),
+        inviteeService.getInvitees(eventId),
+        assignmentService.getEventAssignments(eventId),
+      ]);
 
-    async function loadCounts() {
-      // 1. Sessions count
-      if (propSessionsCount === undefined) {
-        let sessList: any[] = [];
-        try {
-          const res = await sessionService.getSessions(eventId);
-          if (res?.success && Array.isArray(res.data)) sessList = res.data;
-        } catch {}
-
-        let localSess: any[] = [];
-        try {
-          const keys = [`app_local_sessions_${eventId}`];
-          keys.forEach((k) => {
-            const cached = localStorage.getItem(k);
-            if (cached) {
-              const parsed = JSON.parse(cached);
-              if (Array.isArray(parsed)) localSess.push(...parsed);
-            }
-          });
-        } catch {}
-
-        const combinedSess = [...sessList, ...localSess];
-        const sessMap = new Map();
-        combinedSess.forEach((s, idx) => {
-          const name = s.name || s.title || `Session ${idx + 1}`;
-          if (!sessMap.has(name)) sessMap.set(name, s);
-        });
-        setSessionsCount(sessMap.size);
+      if (sessRes?.success) {
+        const sCount = (sessRes as any).meta?.total ?? (Array.isArray(sessRes.data) ? sessRes.data.length : 0);
+        setSessionsCount(sCount);
+      } else if (propSessionsCount !== undefined) {
+        setSessionsCount(propSessionsCount);
       }
 
-      // 2. Invitees count
-      if (propInviteesCount === undefined) {
-        let invList: any[] = [];
-        try {
-          const res = await inviteeService.getInvitees(eventId);
-          if (res?.success && Array.isArray(res.data)) invList = res.data;
-        } catch {}
-
-        let localInv: any[] = [];
-        try {
-          const keys = [`app_local_invitees_${eventId}`];
-          keys.forEach((k) => {
-            const cached = localStorage.getItem(k);
-            if (cached) {
-              const parsed = JSON.parse(cached);
-              if (Array.isArray(parsed)) localInv.push(...parsed);
-            }
-          });
-        } catch {}
-
-        const combinedInv = [...invList, ...localInv];
-        const invMap = new Map();
-        combinedInv.forEach((i, idx) => {
-          const email = i.email || i.id || `inv_${idx}`;
-          if (!invMap.has(email)) invMap.set(email, i);
-        });
-        setInviteesCount(invMap.size);
+      if (invRes?.success) {
+        const iCount = (invRes as any).meta?.total ?? (Array.isArray(invRes.data) ? invRes.data.length : 0);
+        setInviteesCount(iCount);
+      } else if (propInviteesCount !== undefined) {
+        setInviteesCount(propInviteesCount);
       }
 
-      // 3. Assignments count
-      if (propAssignmentsCount === undefined) {
-        let assignList: any[] = [];
-        try {
-          const res = await assignmentService.getEventAssignments(eventId);
-          if (res?.success && Array.isArray(res.data)) assignList = res.data;
-        } catch {}
-
-        let localAssign: any[] = [];
-        try {
-          const keys = [`app_local_assignments_${eventId}`];
-          keys.forEach((k) => {
-            const cached = localStorage.getItem(k);
-            if (cached) {
-              const parsed = JSON.parse(cached);
-              if (Array.isArray(parsed)) localAssign.push(...parsed);
-            }
-          });
-        } catch {}
-
-        const combinedAssign = [...assignList, ...localAssign];
-        setAssignmentsCount(combinedAssign.length);
+      if (assignRes?.success) {
+        const aCount = Array.isArray(assignRes.data) ? assignRes.data.length : 0;
+        setAssignmentsCount(aCount);
+      } else if (propAssignmentsCount !== undefined) {
+        setAssignmentsCount(propAssignmentsCount);
       }
+    } catch (err) {
+      console.error("Error loading subnav counts from database:", err);
     }
-
-    loadCounts();
   }, [eventId, propSessionsCount, propInviteesCount, propAssignmentsCount]);
+
+  useEffect(() => {
+    fetchUnifiedCounts();
+
+    const handleUpdate = () => {
+      fetchUnifiedCounts();
+    };
+
+    window.addEventListener("lgpsm-db-update", handleUpdate);
+    window.addEventListener("focus", handleUpdate);
+
+    return () => {
+      window.removeEventListener("lgpsm-db-update", handleUpdate);
+      window.removeEventListener("focus", handleUpdate);
+    };
+  }, [fetchUnifiedCounts]);
 
   const formatCount = (count: number) => count.toString().padStart(2, "0");
 

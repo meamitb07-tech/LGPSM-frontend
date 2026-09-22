@@ -7,11 +7,14 @@ import { userService } from "@/services/userService";
 import UserNavDropdown from "@/components/common/UserNavDropdown";
 import CustomDropdown from "@/components/common/CustomDropdown";
 import { eventService } from "@/services/eventService";
-import { getAssignedCountText, SystemUserRow, AssignedEventCard, AssignedSession } from "@/app/(dashboard)/user-management/assign/page";
+import { sessionService } from "@/services/sessionService";
+import { assignmentService, AssignmentData } from "@/services/assignmentService";
+import { getAssignedCountText, SystemUserRow } from "@/app/(dashboard)/user-management/assign/page";
 
 export default function AllUsersPage() {
   const { user } = useAuth();
   const [users, setUsers] = useState<SystemUserRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [expandedUserIds, setExpandedUserIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -23,113 +26,121 @@ export default function AllUsersPage() {
 
   // Form selections
   const [eventsList, setEventsList] = useState<{ id: string; name: string }[]>([]);
-  const [selectedEvent, setSelectedEvent] = useState("Product Launch Event 2026");
-  const [selectedSession, setSelectedSession] = useState("Entry Session");
+  const [selectedEventId, setSelectedEventId] = useState<string>("");
+  const [eventSessionsList, setEventSessionsList] = useState<{ id: string; name: string }[]>([]);
+  const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
+  const [submittingAssign, setSubmittingAssign] = useState(false);
+  const [errorFeedback, setErrorFeedback] = useState<string | null>(null);
 
-  const saveUsersToLocal = (updatedUsers: SystemUserRow[]) => {
+  const fetchUsersAndAssignments = async () => {
     try {
-      const keys = ["app_local_system_users", "app_local_users"];
-      keys.forEach((k) => {
-        localStorage.setItem(k, JSON.stringify(updatedUsers));
-      });
-    } catch (e) {
-      console.error("Error saving users to local storage:", e);
+      setIsLoading(true);
+      setErrorFeedback(null);
+
+      // 1. Fetch system users only (role === SYSTEM_USER)
+      const usersRes = await userService.getUsers("SYSTEM_USER");
+      const rawUsers = Array.isArray(usersRes?.data) ? usersRes.data : [];
+      const systemUsersOnly = rawUsers.filter(u => u.role === "SYSTEM_USER");
+
+      // 2. Fetch events
+      const eventsRes = await eventService.getEvents();
+      const rawEvents = Array.isArray(eventsRes?.data) ? eventsRes.data : ((eventsRes?.data as any)?.events || []);
+      const formattedEvents = rawEvents.map((ev: any) => ({
+        id: ev._id || ev.id,
+        name: ev.title || ev.eventName || "Untitled Event",
+      }));
+      setEventsList(formattedEvents);
+      if (formattedEvents.length > 0 && !selectedEventId) {
+        setSelectedEventId(formattedEvents[0].id);
+      }
+
+      // 3. Collect assignments across events
+      const userAssignmentsMap: Record<string, SystemUserRow["assignments"]> = {};
+
+      for (const ev of formattedEvents) {
+        if (!ev.id) continue;
+        try {
+          const assignRes = await assignmentService.getAssignmentsByEvent(ev.id);
+          const assignmentsList: AssignmentData[] = Array.isArray(assignRes?.data) ? assignRes.data : [];
+
+          assignmentsList.forEach((asn) => {
+            const userId = typeof asn.userId === "object" ? asn.userId?._id : asn.userId;
+            if (!userId) return;
+
+            if (!userAssignmentsMap[userId]) {
+              userAssignmentsMap[userId] = [];
+            }
+
+            const sessions = (asn.sessionIds || []).map((s: any) => ({
+              id: typeof s === "object" ? s._id : s,
+              name: typeof s === "object" ? (s.name || "Session") : "Session",
+              time: typeof s === "object" && s.schedule?.startTime ? `${s.schedule.startTime}` : undefined,
+            }));
+
+            const assignedByObj = typeof asn.assignedBy === "object" ? asn.assignedBy : null;
+            const assignedByName = assignedByObj?.fullName || assignedByObj?.email || "Organizer";
+
+            userAssignmentsMap[userId].push({
+              assignmentId: asn._id,
+              eventId: ev.id,
+              eventName: ev.name,
+              assignedBy: assignedByName,
+              assignedAt: asn.createdAt ? new Date(asn.createdAt).toLocaleDateString() : undefined,
+              sessions,
+            });
+          });
+        } catch (e) {}
+      }
+
+      const formattedUserRows: SystemUserRow[] = systemUsersOnly.map((u: any) => ({
+        id: u._id || u.id,
+        name: u.fullName || u.name || "System User",
+        email: u.email || "",
+        phone: u.phone || u.contactNo || "--",
+        role: u.role,
+        assignments: userAssignmentsMap[u._id || u.id] || [],
+      }));
+
+      setUsers(formattedUserRows);
+    } catch (err: any) {
+      console.error("Error loading system users:", err);
+      setErrorFeedback(err.message || "Failed to load system users.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const fetchUsers = async () => {
-    let apiUsers: SystemUserRow[] = [];
-    try {
-      const res = await userService.getUsers();
-      const rawList = Array.isArray(res?.data) ? res.data : ((res?.data as any)?.users || []);
-      if (res?.success && Array.isArray(rawList) && rawList.length > 0) {
-        apiUsers = rawList.map((u: any, idx: number) => ({
-          id: u._id || u.id || `api_usr_${idx}`,
-          name: u.fullName || u.name || "System User",
-          email: u.email || "",
-          phone: u.phone || u.contactNo || "",
-          assignedEvents: u.assignedEvents || [],
-        }));
-      }
-    } catch (e) { }
+  useEffect(() => {
+    fetchUsersAndAssignments();
+  }, []);
 
-    let localUsers: SystemUserRow[] = [];
-    try {
-      const keys = ["app_local_system_users", "app_local_users"];
-      keys.forEach((key) => {
-        const cached = localStorage.getItem(key);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed)) {
-            parsed.forEach((u: any) => {
-              const id = u.id || u._id || `loc_${Math.random()}`;
-              const name = u.name || u.fullName || "User";
-              const email = u.email || "";
-              const phone = u.phone || u.contactNo || "";
-              if (!localUsers.some((existing) => existing.email === email && existing.name === name)) {
-                localUsers.push({
-                  id,
-                  name,
-                  email,
-                  phone,
-                  assignedEvents: u.assignedEvents || [],
-                });
-              }
-            });
+  // Fetch sessions for selected event in modal
+  useEffect(() => {
+    if (!selectedEventId) return;
+
+    async function loadSessions() {
+      try {
+        const res = await sessionService.getSessions(selectedEventId);
+        if (res.success && Array.isArray(res.data)) {
+          const mapped = res.data.map((s: any) => ({
+            id: s._id || s.id,
+            name: s.name || s.title || "Session",
+          }));
+          setEventSessionsList(mapped);
+          if (mapped.length > 0) {
+            setSelectedSessionIds([mapped[0].id]);
+          } else {
+            setSelectedSessionIds([]);
           }
         }
-      });
-    } catch (e) { }
-
-    const combinedMap = new Map();
-    localUsers.forEach((u) => combinedMap.set(u.email || u.id, u));
-    apiUsers.forEach((u) => combinedMap.set(u.email || u.id, u));
-
-    setUsers(Array.from(combinedMap.values()));
-  };
-
-  const fetchEvents = async () => {
-    try {
-      const res = await eventService.getEvents();
-      if (res?.success && res.data) {
-        const list = Array.isArray(res.data) ? res.data : (res.data as any).events;
-        if (Array.isArray(list) && list.length > 0) {
-          const mapped = list.map((e: any) => ({
-            id: e.id || e._id,
-            name: e.title || e.name || "Untitled Event",
-          }));
-          setEventsList((prev) => {
-            const uniqueMap = new Map();
-            [...prev, ...mapped].forEach((item) => uniqueMap.set(item.name, item));
-            return Array.from(uniqueMap.values());
-          });
-        }
+      } catch (err) {
+        setEventSessionsList([]);
+        setSelectedSessionIds([]);
       }
-    } catch (e) { }
+    }
 
-    try {
-      const cachedEvts = localStorage.getItem("app_local_events");
-      if (cachedEvts) {
-        const parsed = JSON.parse(cachedEvts);
-        if (Array.isArray(parsed)) {
-          const localMapped = parsed.map((e: any) => ({
-            id: e.id || e._id || `loc_evt_${Math.random()}`,
-            name: e.title || e.name || "Custom Event",
-          }));
-          setEventsList((prev) => {
-            const uniqueMap = new Map();
-            [...prev, ...localMapped].forEach((item) => uniqueMap.set(item.name, item));
-            return Array.from(uniqueMap.values());
-          });
-        }
-      }
-    } catch (e) { }
-  };
-
-  useEffect(() => {
-    fetchUsers();
-    fetchEvents();
-  }, []);
+    loadSessions();
+  }, [selectedEventId]);
 
   const toggleExpand = (id: string) => {
     if (expandedUserIds.includes(id)) {
@@ -155,78 +166,54 @@ export default function AllUsersPage() {
     }
   };
 
-  const handleDeleteSelected = () => {
-    if (selectedIds.length === 0) return;
-    const remaining = users.filter((u) => !selectedIds.includes(u.id));
-    setUsers(remaining);
-    saveUsersToLocal(remaining);
-    setSelectedIds([]);
-  };
+  const handleUnassignAssignment = async (assignmentId: string) => {
+    if (!confirm("Are you sure you want to unassign this system user?")) return;
 
-  const handleUnassignSession = (userId: string, eventCardId: string, sessionId: string) => {
-    const updated = users.map((u) => {
-      if (u.id !== userId) return u;
-
-      const updatedEvents = u.assignedEvents
-        .map((evt) => {
-          if (evt.id !== eventCardId) return evt;
-          const remainingSessions = evt.sessions.filter((s) => s.id !== sessionId);
-          return { ...evt, sessions: remainingSessions };
-        })
-        .filter((evt) => evt.sessions.length > 0);
-
-      return { ...u, assignedEvents: updatedEvents };
-    });
-
-    setUsers(updated);
-    saveUsersToLocal(updated);
-  };
-
-  const handleAssignSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedIds.length === 0) return;
-
-    const eventNameClean = selectedEvent.trim() || "Product Launch Event 2026";
-    const sessionNameClean = selectedSession.trim().toUpperCase() || "ENTRY SESSION";
-
-    const updatedUsers = users.map((u) => {
-      if (!selectedIds.includes(u.id)) return u;
-
-      let currentEvents = [...(u.assignedEvents || [])];
-      let existingEvt = currentEvents.find(
-        (e) => e.eventName.toLowerCase() === eventNameClean.toLowerCase() || eventNameClean.toLowerCase().includes(e.eventName.toLowerCase())
-      );
-
-      const newSessionObj: AssignedSession = {
-        id: `sess_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-        name: sessionNameClean.includes("SESSION") ? sessionNameClean : `${sessionNameClean} SESSION`,
-        time: "09:00 AM TO 05:00 PM",
-      };
-
-      if (existingEvt) {
-        if (!existingEvt.sessions.some((s) => s.name.toLowerCase() === newSessionObj.name.toLowerCase())) {
-          existingEvt.sessions = [...existingEvt.sessions, newSessionObj];
-        }
+    try {
+      setErrorFeedback(null);
+      const res = await assignmentService.deleteAssignment(assignmentId);
+      if (res.success || (res as any).data?.deleted) {
+        await fetchUsersAndAssignments();
       } else {
-        currentEvents.push({
-          id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-          eventName: eventNameClean,
-          dateStr: "2026",
-          sessions: [newSessionObj],
+        setErrorFeedback(res.message || "Failed to unassign user.");
+      }
+    } catch (err: any) {
+      setErrorFeedback(err.message || "Error unassigning user.");
+    }
+  };
+
+  const handleAssignSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedIds.length === 0 || !selectedEventId) return;
+
+    try {
+      setSubmittingAssign(true);
+      setErrorFeedback(null);
+
+      const errorMsgs: string[] = [];
+      for (const userId of selectedIds) {
+        const res = await assignmentService.createAssignment(selectedEventId, {
+          userId,
+          sessionIds: selectedSessionIds,
         });
+
+        if (!res.success && res.message) {
+          errorMsgs.push(res.message);
+        }
       }
 
-      return {
-        ...u,
-        assignedEvents: currentEvents,
-      };
-    });
+      if (errorMsgs.length > 0) {
+        setErrorFeedback(errorMsgs.join(". "));
+      }
 
-    setUsers(updatedUsers);
-    saveUsersToLocal(updatedUsers);
-    setIsAssignModalOpen(false);
-    setIsAssignSuccessModalOpen(true);
-    setExpandedUserIds((prev) => Array.from(new Set([...prev, ...selectedIds])));
+      setIsAssignModalOpen(false);
+      setIsAssignSuccessModalOpen(true);
+      await fetchUsersAndAssignments();
+    } catch (err: any) {
+      setErrorFeedback(err.message || "Error assigning system users.");
+    } finally {
+      setSubmittingAssign(false);
+    }
   };
 
   const filteredUsers = users.filter(
@@ -237,99 +224,118 @@ export default function AllUsersPage() {
   );
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-white select-none">
-        {/* Header */}
-        <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
-          <h1 className="text-xl font-bold text-gray-900">All Users</h1>
-          <UserNavDropdown />
-        </header>
+    <div className="flex-1 flex flex-col min-w-0 bg-white select-none font-sans">
+      {/* Header */}
+      <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
+        <h1 className="text-xl font-bold text-gray-900">All System Users</h1>
+        <UserNavDropdown />
+      </header>
 
-        {/* Page Content */}
-        <main className="p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6 bg-white pb-24">
-          {/* Controls Bar: Title + Search Bar on Left, + Add User Button on Right */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-4 flex-1 max-w-2xl">
-              <h2 className="text-lg font-bold text-gray-900 shrink-0">System Users</h2>
+      {/* Page Content */}
+      <main className="p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6 bg-white pb-24">
+        {errorFeedback && (
+          <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between">
+            <span>{errorFeedback}</span>
+            <button
+              onClick={() => setErrorFeedback(null)}
+              className="font-bold text-rose-600 hover:text-rose-800 ml-4 cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
-              {/* Search Bar */}
-              <div className="relative flex-1">
-                <svg
-                  className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-                <input
-                  type="text"
-                  placeholder="Search..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-md text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#FF5B22] transition-colors"
-                />
-              </div>
-            </div>
+        {/* Controls Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4 flex-1 max-w-2xl">
+            <h2 className="text-lg font-bold text-gray-900 shrink-0">System Users</h2>
 
-            {/* + Add User Button */}
-            <div className="flex items-center gap-3 shrink-0">
-              <Link
-                href="/user-management/add"
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-2xs"
+            <div className="relative flex-1">
+              <svg
+                className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                <span>Add User</span>
-              </Link>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-md text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#FF5B22] transition-colors"
+              />
             </div>
           </div>
 
-          {/* Select All Checkbox */}
-          <div className="flex items-center gap-2 text-xs font-semibold text-gray-600 pt-1">
-            <input
-              type="checkbox"
-              id="selectAll"
-              checked={selectedIds.length === users.length && users.length > 0}
-              onChange={toggleSelectAll}
-              className="rounded border-gray-300 text-[#FF5B22] focus:ring-[#FF5B22] cursor-pointer"
-            />
-            <label htmlFor="selectAll" className="cursor-pointer">
-              Select All
-            </label>
+          <div className="flex items-center gap-3 shrink-0">
+            <Link
+              href="/user-management/add"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-2xs"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span>Add User</span>
+            </Link>
           </div>
+        </div>
 
-          {/* Users Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs whitespace-nowrap">
-              <thead>
-                <tr className="border-b border-gray-200 text-gray-500 font-medium text-[11px]">
-                  <th className="py-3 px-4 w-10"></th>
-                  <th className="py-3 px-4 font-medium">User Name</th>
-                  <th className="py-3 px-4 font-medium">Assigned Events & Sessions</th>
-                  <th className="py-3 px-4 font-medium">Email</th>
-                  <th className="py-3 px-4 font-medium">Phone Number</th>
-                  <th className="py-3 px-4 text-right font-medium">Action</th>
+        {/* Select All Checkbox */}
+        <div className="flex items-center gap-2 text-xs font-semibold text-gray-600 pt-1">
+          <input
+            type="checkbox"
+            id="selectAll"
+            checked={selectedIds.length === filteredUsers.length && filteredUsers.length > 0}
+            onChange={toggleSelectAll}
+            className="rounded border-gray-300 text-[#FF5B22] focus:ring-[#FF5B22] cursor-pointer"
+          />
+          <label htmlFor="selectAll" className="cursor-pointer">
+            Select All ({selectedIds.length} selected)
+          </label>
+        </div>
+
+        {/* Users Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs whitespace-nowrap">
+            <thead>
+              <tr className="border-b border-gray-200 text-gray-500 font-medium text-[11px]">
+                <th className="py-3 px-4 w-10"></th>
+                <th className="py-3 px-4 font-medium">User Name</th>
+                <th className="py-3 px-4 font-medium">Assigned Events & Sessions</th>
+                <th className="py-3 px-4 font-medium">Email</th>
+                <th className="py-3 px-4 font-medium">Phone Number</th>
+                <th className="py-3 px-4 text-right font-medium">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 text-gray-800">
+              {isLoading ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-gray-500 text-sm">
+                    <div className="flex flex-col items-center justify-center space-y-3">
+                      <div className="w-6 h-6 border-2 border-[#FF5B22] border-t-transparent rounded-full animate-spin"></div>
+                      <p>Loading system users...</p>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 text-gray-800">
-                {filteredUsers.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="py-12 text-center text-gray-400 text-sm">
-                      No users to display. Create users using the Add User button.
-                    </td>
-                  </tr>
-                )}
-                {filteredUsers.map((u) => {
+              ) : filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-gray-400 text-sm">
+                    No SYSTEM_USER accounts found. Add users using the Add User button.
+                  </td>
+                </tr>
+              ) : (
+                filteredUsers.map((u) => {
                   const isExpanded = expandedUserIds.includes(u.id);
                   const isSelected = selectedIds.includes(u.id);
                   const isActionActive = activeActionId === u.id;
-                  const countText = getAssignedCountText(u.assignedEvents);
+                  const countText = getAssignedCountText(u.assignments);
 
                   return (
                     <tr key={u.id} className="hover:bg-gray-50/80 transition-colors align-top">
@@ -342,7 +348,12 @@ export default function AllUsersPage() {
                         />
                       </td>
 
-                      <td className="py-4 px-4 font-medium text-gray-900">{u.name}</td>
+                      <td className="py-4 px-4 font-medium text-gray-900">
+                        <div>{u.name}</div>
+                        <span className="text-[10px] font-mono text-[#FF5B22] bg-[#FF5B22]/10 px-1.5 py-0.5 rounded">
+                          SYSTEM_USER
+                        </span>
+                      </td>
 
                       {/* Assigned Events & Sessions */}
                       <td className="py-4 px-4">
@@ -352,8 +363,9 @@ export default function AllUsersPage() {
                           className="flex items-center gap-2 font-bold text-gray-800 hover:text-[#FF5B22] transition-colors cursor-pointer"
                         >
                           <svg
-                            className={`w-3.5 h-3.5 text-gray-700 transform transition-transform duration-200 ${isExpanded ? "rotate-180" : ""
-                              }`}
+                            className={`w-3.5 h-3.5 text-gray-700 transform transition-transform duration-200 ${
+                              isExpanded ? "rotate-180" : ""
+                            }`}
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"
@@ -363,30 +375,40 @@ export default function AllUsersPage() {
                           <span>{countText}</span>
                         </button>
 
-                        {/* Expanded Cards View matching Screenshot 1 & 2 */}
-                        {isExpanded && u.assignedEvents && u.assignedEvents.length > 0 && (
+                        {/* Expanded Cards View */}
+                        {isExpanded && u.assignments && u.assignments.length > 0 && (
                           <div className="mt-3 space-y-3 max-w-sm text-left">
-                            {u.assignedEvents.map((evt) => (
+                            {u.assignments.map((asn) => (
                               <div
-                                key={evt.id}
+                                key={asn.assignmentId}
                                 className="bg-white border border-gray-200 rounded-md p-3 shadow-2xs space-y-2 whitespace-normal"
                               >
-                                <div className="text-xs font-semibold text-gray-800">
-                                  {evt.eventName} {evt.dateStr ? `- ${evt.dateStr}` : ""}
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="text-xs font-semibold text-gray-800">
+                                    {asn.eventName}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUnassignAssignment(asn.assignmentId)}
+                                    className="text-rose-600 underline text-xs font-semibold hover:text-rose-800 cursor-pointer"
+                                  >
+                                    Unassign
+                                  </button>
                                 </div>
-                                <div className="space-y-1.5">
-                                  {evt.sessions.map((sess) => (
+
+                                {asn.assignedBy && (
+                                  <div className="text-[10px] text-gray-500">
+                                    Assigned by: <span className="font-medium text-gray-700">{asn.assignedBy}</span>
+                                    {asn.assignedAt ? ` on ${asn.assignedAt}` : ""}
+                                  </div>
+                                )}
+
+                                <div className="space-y-1.5 pt-1">
+                                  {asn.sessions.map((sess) => (
                                     <div key={sess.id} className="flex items-center gap-2 flex-wrap">
                                       <div className="inline-flex items-center bg-[#FF5B22] text-white px-2.5 py-1 rounded-md text-[10px] font-bold tracking-tight uppercase">
                                         • {sess.name} {sess.time ? `| ${sess.time}` : ""}
                                       </div>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleUnassignSession(u.id, evt.id, sess.id)}
-                                        className="text-[#FF5B22] underline text-xs font-semibold hover:text-[#E04B16] cursor-pointer"
-                                      >
-                                        Unassign
-                                      </button>
                                     </div>
                                   ))}
                                 </div>
@@ -399,7 +421,6 @@ export default function AllUsersPage() {
                       <td className="py-4 px-4 text-gray-600">{u.email}</td>
                       <td className="py-4 px-4 text-gray-600">{u.phone}</td>
 
-                      {/* Action Column */}
                       <td className="py-4 px-4 text-right relative">
                         <button
                           type="button"
@@ -410,65 +431,38 @@ export default function AllUsersPage() {
                             <path d="M6 10a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4z" />
                           </svg>
                         </button>
-
-                        {isActionActive && (
-                          <div
-                            onClick={() => {
-                              setActiveActionId(null);
-                              setIsAssignModalOpen(true);
-                            }}
-                            className="absolute right-4 top-12 z-30 bg-[#1E232A] text-white text-xs font-semibold px-3 py-2 rounded-md shadow-xl border border-gray-700 animate-in fade-in duration-150 flex items-center gap-2 cursor-pointer hover:bg-gray-800"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                            </svg>
-                            <span>Edit</span>
-                          </div>
-                        )}
                       </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
 
-          {/* Bottom Control Bar: Trash Icon + Dynamic "Assign X users ->" Button (Image 2) */}
-          <div className="pt-4 flex flex-col sm:flex-row sm:items-center justify-end gap-3">
-            {selectedIds.length > 0 && (
-              <button
-                type="button"
-                onClick={handleDeleteSelected}
-                title="Delete Selected Users"
-                className="p-2 text-[#FF5B22] hover:bg-orange-50 rounded-md transition-colors cursor-pointer shrink-0"
-              >
-                <svg className="w-5 h-5 text-[#FF5B22]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
-            )}
+        {/* Bottom Control Bar */}
+        <div className="pt-4 flex flex-col sm:flex-row sm:items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => setIsAssignModalOpen(true)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 border border-[#FF5B22] text-[#FF5B22] hover:bg-[#FF5B22] hover:text-white font-bold text-xs rounded-md transition-colors cursor-pointer shrink-0"
+          >
+            <span>
+              Assign {selectedIds.length} {selectedIds.length === 1 ? "user" : "users"}
+            </span>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </button>
+        </div>
+      </main>
 
-            <button
-              type="button"
-              onClick={() => setIsAssignModalOpen(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 border border-[#FF5B22] text-[#FF5B22] hover:bg-[#FF5B22] hover:text-white font-bold text-xs rounded-md transition-colors cursor-pointer shrink-0"
-            >
-              <span>
-                Assign {selectedIds.length} {selectedIds.length === 1 ? "user" : "users"}
-              </span>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-              </svg>
-            </button>
-          </div>
-        </main>
-
-      {/* ── Assign User Modal (Image 3) ── */}
+      {/* ── Assign User Modal ── */}
       {isAssignModalOpen && (
         <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-md border border-gray-200 shadow-2xl max-w-md w-full overflow-hidden space-y-6">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-base font-bold text-gray-900">Assign User</h3>
+              <h3 className="text-base font-bold text-gray-900">Assign System User</h3>
               <button
                 type="button"
                 onClick={() => setIsAssignModalOpen(false)}
@@ -481,36 +475,50 @@ export default function AllUsersPage() {
             </div>
 
             <form onSubmit={handleAssignSubmit} className="px-6 space-y-5">
-              {/* Event Dropdown */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-gray-800">
                   Event<span className="text-[#FF5B22]">*</span>
                 </label>
-                <CustomDropdown
-                  value={selectedEvent}
-                  onChange={(val) => setSelectedEvent(val)}
-                  options={eventsList.map((evt) => ({ value: evt.name, label: evt.name }))}
-                  placeholder="Select Event"
-                />
+                <select
+                  value={selectedEventId}
+                  onChange={(e) => setSelectedEventId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-md text-xs text-gray-800 focus:outline-none focus:border-[#FF5B22] cursor-pointer"
+                >
+                  {eventsList.map((evt) => (
+                    <option key={evt.id} value={evt.id}>
+                      {evt.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              {/* Session Dropdown */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-gray-800">
-                  Session<span className="text-[#FF5B22]">*</span>
+                  Sessions<span className="text-[#FF5B22]">*</span>
                 </label>
-                <CustomDropdown
-                  value={selectedSession}
-                  onChange={(val) => setSelectedSession(val)}
-                  options={[
-                    { value: "Entry Session", label: "Entry Session" },
-                    { value: "Lunch Session", label: "Lunch Session" },
-                    { value: "Dinner Session", label: "Dinner Session" },
-                    { value: "Morning Session", label: "Morning Session" },
-                    { value: "Keynote Session", label: "Keynote Session" },
-                  ]}
-                  placeholder="Select Session"
-                />
+                {eventSessionsList.length > 0 ? (
+                  <div className="space-y-2 border border-gray-200 rounded-md p-3 max-h-40 overflow-y-auto">
+                    {eventSessionsList.map((s) => (
+                      <label key={s.id} className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedSessionIds.includes(s.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedSessionIds([...selectedSessionIds, s.id]);
+                            } else {
+                              setSelectedSessionIds(selectedSessionIds.filter((id) => id !== s.id));
+                            }
+                          }}
+                          className="rounded border-gray-300 text-[#FF5B22] focus:ring-[#FF5B22]"
+                        />
+                        <span>{s.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">No sessions found for this event.</p>
+                )}
               </div>
 
               <div className="pt-2 pb-6 flex items-center justify-end gap-3">
@@ -523,9 +531,10 @@ export default function AllUsersPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-xs"
+                  disabled={submittingAssign}
+                  className="px-6 py-2 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-xs disabled:opacity-50"
                 >
-                  Assign
+                  {submittingAssign ? "Saving..." : "Assign"}
                 </button>
               </div>
             </form>
@@ -533,7 +542,7 @@ export default function AllUsersPage() {
         </div>
       )}
 
-      {/* ── Assigned Successfully! Modal (Image 4) ── */}
+      {/* Success Modal */}
       {isAssignSuccessModalOpen && (
         <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-md border border-gray-200 shadow-2xl max-w-sm w-full p-8 text-center space-y-6">

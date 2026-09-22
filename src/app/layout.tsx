@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Space_Grotesk, Caveat } from "next/font/google";
 import "@/styles/globals.scss";
 import { AuthProvider } from "@/context/AuthContext";
+import { AlertProvider } from "@/context/AlertContext";
 import SmoothScrollProvider from "@/components/common/SmoothScrollProvider";
 
 const inter = Inter({
@@ -39,7 +40,9 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col font-sans bg-white text-gray-900 selection:bg-[#FF5B22] selection:text-white">
         <AuthProvider>
-          <SmoothScrollProvider>{children}</SmoothScrollProvider>
+          <AlertProvider>
+            <SmoothScrollProvider>{children}</SmoothScrollProvider>
+          </AlertProvider>
         </AuthProvider>
       </body>
     </html>

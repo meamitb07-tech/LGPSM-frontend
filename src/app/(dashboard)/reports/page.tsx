@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { InviteeLog, AccessLog, SessionReport } from "@/types/reports";
 import ReportsHeaderControls from "@/components/reports/ReportsHeaderControls";
@@ -8,10 +8,12 @@ import ReportsStatsCards from "@/components/reports/ReportsStatsCards";
 import ReportsCharts from "@/components/reports/ReportsCharts";
 import UserNavDropdown from "@/components/common/UserNavDropdown";
 import ReportsLogsTable from "@/components/reports/ReportsLogsTable";
+import CheckInModal from "@/components/common/CheckInModal";
 import { eventService } from "@/services/eventService";
 import { userService } from "@/services/userService";
 import { sessionService } from "@/services/sessionService";
 import { inviteeService } from "@/services/inviteeService";
+import { checkInService, CheckInRecord } from "@/services/checkInService";
 
 export default function ReportsPage() {
   const { user } = useAuth();
@@ -22,7 +24,8 @@ export default function ReportsPage() {
     start: "25/11/2026 09:30 AM",
     end: "26/11/2026 06:00 PM",
   });
-  const [activeTab, setActiveTab] = useState<"invitees" | "access" | "sessions">("invitees");
+
+  const [activeTab, setActiveTab] = useState<"checkins" | "invitees" | "access" | "sessions">("checkins");
   const [searchQuery, setSearchQuery] = useState("");
   const [tableSearch, setTableSearch] = useState("");
 
@@ -30,6 +33,17 @@ export default function ReportsPage() {
   const [eventOptions, setEventOptions] = useState<{ value: string; label: string }[]>([]);
   const [allEventsList, setAllEventsList] = useState<any[]>([]);
 
+  // Real Check-In state
+  const [checkInLogs, setCheckInLogs] = useState<CheckInRecord[]>([]);
+  const [loadingCheckIns, setLoadingCheckIns] = useState<boolean>(false);
+  const [checkInPage, setCheckInPage] = useState<number>(1);
+  const [checkInLimit] = useState<number>(20);
+  const [checkInTotal, setCheckInTotal] = useState<number>(0);
+  const [checkInTotalPages, setCheckInTotalPages] = useState<number>(1);
+  const [methodFilter, setMethodFilter] = useState<string>("");
+  const [isCheckInModalOpen, setIsCheckInModalOpen] = useState<boolean>(false);
+
+  // Legacy logs states
   const [inviteeLogs, setInviteeLogs] = useState<InviteeLog[]>([]);
   const [accessLogs, setAccessLogs] = useState<AccessLog[]>([]);
   const [sessionsReport, setSessionsReport] = useState<SessionReport[]>([]);
@@ -113,7 +127,49 @@ export default function ReportsPage() {
     loadInitialData();
   }, []);
 
-  // 2. Load Data for Selected Event
+  // 2. Load Real Check-In Logs from Backend
+  const loadCheckInLogs = useCallback(async () => {
+    if (!selectedEventId) return;
+    setLoadingCheckIns(true);
+    try {
+      const res = await checkInService.getCheckIns(selectedEventId, {
+        page: checkInPage,
+        limit: checkInLimit,
+        checkInMethod: methodFilter || undefined,
+      });
+
+      if (res?.success && Array.isArray(res.data)) {
+        setCheckInLogs(res.data);
+        if (res.meta) {
+          setCheckInTotal(res.meta.total || res.data.length);
+          setCheckInTotalPages(res.meta.totalPages || 1);
+        } else {
+          setCheckInTotal(res.data.length);
+          setCheckInTotalPages(1);
+        }
+      } else {
+        setCheckInLogs([]);
+        setCheckInTotal(0);
+        setCheckInTotalPages(1);
+      }
+    } catch (err) {
+      console.error("Failed to load real check-in logs:", err);
+      setCheckInLogs([]);
+    } finally {
+      setLoadingCheckIns(false);
+    }
+  }, [selectedEventId, checkInPage, checkInLimit, methodFilter]);
+
+  useEffect(() => {
+    loadCheckInLogs();
+  }, [loadCheckInLogs]);
+
+  // Reset page to 1 when event or method filter changes
+  useEffect(() => {
+    setCheckInPage(1);
+  }, [selectedEventId, methodFilter]);
+
+  // 3. Load Legacy Data for Selected Event
   useEffect(() => {
     if (!selectedEventId) return;
 
@@ -203,7 +259,7 @@ export default function ReportsPage() {
         systemUsers: String(systemUsersCount || 5),
       }));
 
-      // Access logs mock/real
+      // Access logs
       const formattedAccessLogs: AccessLog[] = [
         { id: "acc_1", userType: "Admin", dateTime: "25/11/2026 10:12 AM", action: "Invitee List Exported", status: "Successful" },
         { id: "acc_2", userType: "System User", dateTime: "25/11/2026 10:30 AM", action: "Invitee Checked In", status: "Successful" },
@@ -217,11 +273,19 @@ export default function ReportsPage() {
     }
 
     loadEventDetails();
-  }, [selectedEventId]);
+  }, [selectedEventId, allEventsList, systemUsersCount]);
 
   const downloadReportCSV = () => {
     let content = "";
-    if (activeTab === "invitees") {
+    if (activeTab === "checkins") {
+      content = "Invitee,Session,Check-In Method,Check-In Time,Checked In By,RSVP Status\n" +
+        checkInLogs.map(log => {
+          const invName = typeof log.invitee === "object" ? log.invitee?.name || "Attendee" : "Attendee";
+          const sessName = typeof log.session === "object" ? log.session?.name || "Event Gate" : "Event Gate";
+          const staffName = typeof log.checkedInBy === "object" ? log.checkedInBy?.fullName || log.checkedInBy?.email || "Staff" : String(log.checkedInBy || "Staff");
+          return `"${invName}","${sessName}","${log.checkInMethod}","${log.checkInAt}","${staffName}","${(log.invitee as any)?.rsvpStatus || "CONFIRMED"}"`;
+        }).join("\n");
+    } else if (activeTab === "invitees") {
       content = "Invitee Name,Mobile No.,Invitation Status,RSVP Status,Check-in Status,Last Check-in Time,Entry Session,Lunch Session\n" +
         inviteeLogs.map(i => `"${i.name}","${i.mobile}","${i.invitationStatus}","${i.rsvpStatus}","${i.checkInStatus}","${i.lastCheckInTime}",${i.entrySession ? "Yes" : "No"},${i.lunchSession ? "Yes" : "No"}`).join("\n");
     } else if (activeTab === "access") {
@@ -240,6 +304,19 @@ export default function ReportsPage() {
     a.click();
   };
 
+  const filteredCheckInLogs = checkInLogs.filter(log => {
+    if (!tableSearch) return true;
+    const invName = (typeof log.invitee === "object" ? log.invitee?.name : "") || "";
+    const invEmail = (typeof log.invitee === "object" ? log.invitee?.email : "") || "";
+    const invMobile = (typeof log.invitee === "object" ? log.invitee?.mobile : "") || "";
+    const query = tableSearch.toLowerCase();
+    return (
+      invName.toLowerCase().includes(query) ||
+      invEmail.toLowerCase().includes(query) ||
+      invMobile.includes(query)
+    );
+  });
+
   const filteredInviteeLogs = inviteeLogs.filter(i =>
     i.name.toLowerCase().includes(tableSearch.toLowerCase()) || i.mobile.includes(tableSearch)
   );
@@ -252,7 +329,7 @@ export default function ReportsPage() {
     s.name.toLowerCase().includes(tableSearch.toLowerCase())
   );
 
-  const checkedInAttendeesCount = inviteeLogs.filter((i) => i.checkInStatus === "Checked-in").length;
+  const totalCheckedInCount = checkInTotal || checkInLogs.length;
 
   return (
     <div className="w-full min-h-full bg-white text-gray-900 font-sans select-none">
@@ -287,9 +364,9 @@ export default function ReportsPage() {
         </div>
 
         <ReportsStatsCards
-          totalInvitees={inviteeLogs.length}
-          totalAttendees={checkedInAttendeesCount || inviteeLogs.length}
-          totalSessions={sessionsReport.length}
+          totalInvitees={inviteeLogs.length || 10}
+          totalAttendees={totalCheckedInCount}
+          totalSessions={sessionsReport.length || 2}
           systemUsers={systemUsersCount || 5}
         />
 
@@ -301,11 +378,32 @@ export default function ReportsPage() {
           tableSearch={tableSearch}
           setTableSearch={setTableSearch}
           onDownloadCSV={downloadReportCSV}
+          checkInLogs={filteredCheckInLogs}
+          loadingCheckIns={loadingCheckIns}
+          page={checkInPage}
+          limit={checkInLimit}
+          total={checkInTotal}
+          totalPages={checkInTotalPages}
+          onPageChange={(newPage) => setCheckInPage(newPage)}
+          methodFilter={methodFilter}
+          onMethodFilterChange={(m) => setMethodFilter(m)}
+          onOpenCheckInModal={() => setIsCheckInModalOpen(true)}
           inviteeLogs={filteredInviteeLogs}
           accessLogs={filteredAccessLogs}
           sessionsReport={filteredSessions}
         />
       </div>
+
+      {/* Check-In Modal Component */}
+      <CheckInModal
+        isOpen={isCheckInModalOpen}
+        onClose={() => setIsCheckInModalOpen(false)}
+        eventId={selectedEventId}
+        eventName={selectedEventTitle}
+        onCheckInSuccess={() => {
+          loadCheckInLogs();
+        }}
+      />
     </div>
   );
 }

@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { eventService } from "@/services/eventService";
+import { sessionService } from "@/services/sessionService";
+import { inviteeService } from "@/services/inviteeService";
 import { getDynamicEventStatus } from "@/utils/eventUtils";
 import { gsap } from "gsap";
 import StepHeader from "@/components/add-event/StepHeader";
@@ -19,6 +21,7 @@ import UserNavDropdown from "@/components/common/UserNavDropdown";
 import DateTimePickerModal from "@/components/add-event/modals/DateTimePickerModal";
 import InviteesPreviewModal from "@/components/add-event/modals/InviteesPreviewModal";
 import SuccessModal from "@/components/add-event/modals/SuccessModal";
+import { useAlert } from "@/context/AlertContext";
 
 function getFormattedCurrentDateTime(offsetHours: number = 0): string {
   const date = new Date(Date.now() + offsetHours * 3600 * 1000);
@@ -37,6 +40,7 @@ function getFormattedCurrentDateTime(offsetHours: number = 0): string {
 export default function AddEventPage() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading, logout } = useAuth();
+  const { showAlert } = useAlert();
 
   const stepContentRef = useRef<HTMLDivElement>(null);
 
@@ -120,11 +124,10 @@ export default function AddEventPage() {
     setIsInviteesPreviewOpen(true);
   };
 
-  const handleFinishEvent = async () => {
+  const handleFinishEvent = async (sessionsList?: any[]) => {
     const finalTitle = eventDetails.title.trim() || "New Tech Event 2026";
     const finalVenue = eventDetails.venue.trim() || "Grand Ballroom, Tech City";
 
-    let createdId = "evt_" + Math.random().toString(36).substring(2, 9);
     try {
       const res = await eventService.createEvent({
         title: finalTitle,
@@ -135,42 +138,55 @@ export default function AddEventPage() {
         location: finalVenue,
         isPublic: true,
       });
-      if (res?.data?.id || (res?.data as any)?._id || (res?.data as any)?.eventId) {
-        createdId = res.data?.id || (res.data as any)?._id || (res.data as any)?.eventId;
+
+      if (res.success && res.data) {
+        const createdId = (res.data as any).eventId || res.data.id || (res.data as any)._id;
+        if (createdId) {
+          // Persist all real sessions created during Add Event to backend
+          if (Array.isArray(sessionsList) && sessionsList.length > 0) {
+            for (const sess of sessionsList) {
+              try {
+                await sessionService.createSession(createdId, {
+                  name: sess.name,
+                  startTime: sess.startTime || startDate,
+                  endTime: sess.endTime || endDate,
+                  accessControl: sess.accessControl,
+                });
+              } catch (sessErr) {
+                console.warn("Session creation info:", sessErr);
+              }
+
+              // Persist invitees to backend if uploaded or listed
+              if (sess.uploadedFile) {
+                try {
+                  await inviteeService.importExcel(createdId, sess.uploadedFile);
+                } catch (impErr) {
+                  console.warn("Invitee excel import info:", impErr);
+                }
+              } else if (Array.isArray(sess.inviteesList) && sess.inviteesList.length > 0) {
+                for (const inv of sess.inviteesList) {
+                  try {
+                    await inviteeService.createInvitee(createdId, {
+                      name: inv.name,
+                      email: inv.email,
+                      mobile: inv.phone || inv.mobile,
+                    });
+                  } catch (invErr) {
+                    console.warn("Invitee creation info:", invErr);
+                  }
+                }
+              }
+            }
+          }
+
+          router.push(`/events/${createdId}`);
+          return;
+        }
       }
+      showAlert(res.message || "Failed to create event.", "error");
     } catch (e: any) {
-      console.warn("Backend event creation network error, saving to local cache:", e);
+      showAlert(e.message || "An error occurred while creating event.", "error");
     }
-
-    // Always cache created event in localStorage so it displays instantly
-    const newEventItem = {
-      id: createdId,
-      eventId: `#${String(createdId).slice(-4).toUpperCase()}`,
-      eventName: finalTitle,
-      title: finalTitle,
-      organizer: user?.fullName || "Super Admin",
-      createdOn: new Date().toLocaleDateString(),
-      category: eventDetails.category || "Corporate",
-      startDate: startDate,
-      endDate: endDate,
-      status: getDynamicEventStatus(startDate, endDate, "Upcoming"),
-      venue: finalVenue,
-    };
-
-    try {
-      const existing = JSON.parse(localStorage.getItem("app_local_events") || "[]");
-      localStorage.setItem("app_local_events", JSON.stringify([newEventItem, ...existing]));
-
-      const inviteesToSave = activePreviewInvitees.length > 0 ? activePreviewInvitees : JSON.parse(localStorage.getItem("app_local_invitees_draft") || "[]");
-      if (inviteesToSave.length > 0) {
-        localStorage.setItem(`app_local_invitees_${createdId}`, JSON.stringify(inviteesToSave));
-        localStorage.setItem(`app_local_invitees_1`, JSON.stringify(inviteesToSave));
-      }
-    } catch (err) {
-      console.error("Failed to write to localStorage:", err);
-    }
-
-    router.push(`/events/${createdId}`);
   };
 
   if (isLoading) {
