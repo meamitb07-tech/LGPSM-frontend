@@ -23,9 +23,9 @@ export default function DashboardLayout({
     if (!isLoading && isAuthenticated && user) {
       const userRole = user.role;
 
-      // 1. SYSTEM_USER route guard: strictly allowed ONLY on /dashboard and /settings/account
+      // 1. SYSTEM_USER route guard: only their assignments dashboard, account settings and notifications
       if (userRole === "SYSTEM_USER") {
-        const allowedSystemUserPaths = ["/dashboard", "/settings/account"];
+        const allowedSystemUserPaths = ["/dashboard", "/settings/account", "/notification", "/notifications"];
         const isAllowed = allowedSystemUserPaths.some(
           (p) => pathname === p || pathname?.startsWith(p + "/")
         );

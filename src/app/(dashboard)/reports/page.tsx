@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { InviteeLog, AccessLog, SessionReport } from "@/types/reports";
+import { InviteeLog, AccessLog, SessionReport, ReportSessionColumn } from "@/types/reports";
 import ReportsHeaderControls from "@/components/reports/ReportsHeaderControls";
 import ReportsStatsCards from "@/components/reports/ReportsStatsCards";
 import ReportsCharts from "@/components/reports/ReportsCharts";
@@ -11,29 +11,42 @@ import ReportsLogsTable from "@/components/reports/ReportsLogsTable";
 import CheckInModal from "@/components/common/CheckInModal";
 import { eventService } from "@/services/eventService";
 import { userService } from "@/services/userService";
-import { sessionService } from "@/services/sessionService";
 import { inviteeService } from "@/services/inviteeService";
 import { checkInService, CheckInRecord } from "@/services/checkInService";
 import { auditLogService } from "@/services/auditLogService";
-import { reportService } from "@/services/reportService";
+import { reportService, EventReportData } from "@/services/reportService";
+
+const ACCESS_CONTROL_LABELS: Record<string, string> = {
+  NO_RESTRICTION: "No Restrictions",
+  ONLY_ONCE: "Only Once",
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  ADMIN: "Admin",
+  ORGANIZER: "Event Organizer",
+  SYSTEM_USER: "System User",
+};
+
+function csvCell(value: unknown): string {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
 
 export default function ReportsPage() {
   const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
   const [selectedOrganizer, setSelectedOrganizer] = useState("");
   const [selectedEventId, setSelectedEventId] = useState("");
-  const [selectedEventTitle, setSelectedEventTitle] = useState("Test Event");
-  const [selectedEventDates, setSelectedEventDates] = useState({
-    start: "25/11/2026 09:30 AM",
-    end: "26/11/2026 06:00 PM",
-  });
 
   const [activeTab, setActiveTab] = useState<"checkins" | "invitees" | "access" | "sessions">("checkins");
   const [searchQuery, setSearchQuery] = useState("");
   const [tableSearch, setTableSearch] = useState("");
 
-  const [organizerOptions, setOrganizerOptions] = useState<{ value: string; label: string }[]>([]);
-  const [eventOptions, setEventOptions] = useState<{ value: string; label: string }[]>([]);
+  const [organizerOptions, setOrganizerOptions] = useState<{ value: string; label: string }[]>([
+    { value: "", label: "All Organizers" },
+  ]);
   const [allEventsList, setAllEventsList] = useState<any[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
 
   // Real Check-In state
   const [checkInLogs, setCheckInLogs] = useState<CheckInRecord[]>([]);
@@ -45,121 +58,97 @@ export default function ReportsPage() {
   const [methodFilter, setMethodFilter] = useState<string>("");
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState<boolean>(false);
 
-  // Legacy logs states
+  // Event report state (all values come from the backend)
+  const [eventReport, setEventReport] = useState<EventReportData | null>(null);
   const [inviteeLogs, setInviteeLogs] = useState<InviteeLog[]>([]);
   const [accessLogs, setAccessLogs] = useState<AccessLog[]>([]);
   const [sessionsReport, setSessionsReport] = useState<SessionReport[]>([]);
-  const [systemUsersCount, setSystemUsersCount] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
+  const [sessionColumns, setSessionColumns] = useState<ReportSessionColumn[]>([]);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  // 1. Fetch Organizers & Events List
+  // 1. Organizer filter options (admin only - organizers only see their own events)
   useEffect(() => {
-    async function loadInitialData() {
-      let orgs: { value: string; label: string }[] = [{ value: "", label: "All Organizers" }];
-      try {
-        const uRes = await userService.getUsers("ORGANIZER");
-        if (uRes?.success && Array.isArray(uRes.data)) {
-          setSystemUsersCount(uRes.data.length);
-          uRes.data.forEach((u: any) => {
-            if (u.role === "ORGANIZER") {
-              orgs.push({ value: u._id || u.id, label: u.fullName || u.name || u.email });
-            }
-          });
-        }
-      } catch (e) {}
-
-      try {
-        const savedOrgs = localStorage.getItem("app_local_organizers");
-        if (savedOrgs) {
-          const parsed = JSON.parse(savedOrgs);
-          parsed.forEach((o: any) => {
-            if (!orgs.some((item) => item.label === o.name)) {
-              orgs.push({ value: o.id, label: o.name });
-            }
-          });
-        }
-      } catch (e) {}
-      setOrganizerOptions(orgs);
-
-      // Load Events
-      let evts: any[] = [];
-      try {
-        const eRes = await eventService.getEvents();
-        if (eRes?.success && Array.isArray(eRes.data)) {
-          evts = eRes.data;
-        }
-      } catch (e) {}
-
-      try {
-        const savedEvts = localStorage.getItem("app_local_events");
-        if (savedEvts) {
-          const parsed = JSON.parse(savedEvts);
-          parsed.forEach((e: any) => {
-            if (!evts.some((item) => (item._id || item.id) === (e._id || e.id))) {
-              evts.push(e);
-            }
-          });
-        }
-      } catch (e) {}
-
-      if (evts.length === 0) {
-        evts = [{ id: "1", title: "Test Event", startDate: "25/11/2026 09:30 AM", endDate: "26/11/2026 06:00 PM" }];
+    if (!isAdmin) return;
+    userService.getUsers("ORGANIZER").then((res) => {
+      if (res.success && Array.isArray(res.data)) {
+        setOrganizerOptions([
+          { value: "", label: "All Organizers" },
+          ...res.data
+            .filter((u) => u.role === "ORGANIZER")
+            .map((u) => ({ value: u._id, label: u.fullName || u.email })),
+        ]);
       }
+    });
+  }, [isAdmin]);
 
-      setAllEventsList(evts);
-
-      const formattedEvtOptions = evts.map((e) => ({
-        value: e._id || e.id || "1",
-        label: e.title || e.eventName || "Untitled Event",
-      }));
-
-      setEventOptions(formattedEvtOptions);
-
-      if (formattedEvtOptions.length > 0) {
-        const firstEvt = evts[0];
-        setSelectedEventId(formattedEvtOptions[0].value);
-        setSelectedEventTitle(formattedEvtOptions[0].label);
-        setSelectedEventDates({
-          start: firstEvt.startDate || firstEvt.schedule?.start || "25/11/2026 09:30 AM",
-          end: firstEvt.endDate || firstEvt.schedule?.end || "26/11/2026 06:00 PM",
-        });
-      }
-    }
-
-    loadInitialData();
-  }, []);
-
-  // 2. Load Real Check-In Logs from Backend
-  const loadCheckInLogs = useCallback(async () => {
-    if (!selectedEventId) return;
-    setLoadingCheckIns(true);
-    try {
-      const res = await checkInService.getCheckIns(selectedEventId, {
-        page: checkInPage,
-        limit: checkInLimit,
-        checkInMethod: methodFilter || undefined,
-      });
-
-      if (res?.success && Array.isArray(res.data)) {
-        setCheckInLogs(res.data);
-        if (res.meta) {
-          setCheckInTotal(res.meta.total || res.data.length);
-          setCheckInTotalPages(res.meta.totalPages || 1);
-        } else {
-          setCheckInTotal(res.data.length);
-          setCheckInTotalPages(1);
-        }
+  // 2. Events for the selected organizer
+  useEffect(() => {
+    let cancelled = false;
+    async function loadEvents() {
+      setLoadingEvents(true);
+      setPageError(null);
+      const res = await eventService.getEvents(selectedOrganizer ? { organizerId: selectedOrganizer } : undefined);
+      if (cancelled) return;
+      if (!res.success) {
+        setPageError(res.message || "Failed to load events.");
+        setAllEventsList([]);
       } else {
-        setCheckInLogs([]);
-        setCheckInTotal(0);
-        setCheckInTotalPages(1);
+        setAllEventsList(Array.isArray(res.data) ? (res.data as any[]) : []);
       }
-    } catch (err) {
-      console.error("Failed to load real check-in logs:", err);
-      setCheckInLogs([]);
-    } finally {
-      setLoadingCheckIns(false);
+      setLoadingEvents(false);
     }
+    loadEvents();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedOrganizer]);
+
+  const eventOptions = allEventsList
+    .filter((e) => !searchQuery.trim() || String(e.title || "").toLowerCase().includes(searchQuery.trim().toLowerCase()))
+    .map((e) => ({ value: e._id || e.id, label: e.title || "Untitled Event" }));
+
+  // Keep the selection valid for the current event list
+  useEffect(() => {
+    if (allEventsList.length === 0) {
+      setSelectedEventId("");
+      return;
+    }
+    if (!allEventsList.some((e) => (e._id || e.id) === selectedEventId)) {
+      setSelectedEventId(allEventsList[0]._id || allEventsList[0].id);
+    }
+  }, [allEventsList, selectedEventId]);
+
+  const selectedEvent = allEventsList.find((e) => (e._id || e.id) === selectedEventId) || null;
+  const selectedEventTitle = selectedEvent?.title || "";
+  const formatDate = (value?: string) => (value ? new Date(value).toLocaleString() : "TBD");
+
+  // 3. Paginated check-in logs
+  const loadCheckInLogs = useCallback(async () => {
+    if (!selectedEventId) {
+      setCheckInLogs([]);
+      setCheckInTotal(0);
+      setCheckInTotalPages(1);
+      return;
+    }
+    setLoadingCheckIns(true);
+    const res = await checkInService.getCheckIns(selectedEventId, {
+      page: checkInPage,
+      limit: checkInLimit,
+      checkInMethod: methodFilter || undefined,
+    });
+
+    if (res?.success && Array.isArray(res.data)) {
+      setCheckInLogs(res.data);
+      setCheckInTotal(res.meta?.total ?? res.data.length);
+      setCheckInTotalPages(res.meta?.totalPages || 1);
+    } else {
+      setCheckInLogs([]);
+      setCheckInTotal(0);
+      setCheckInTotalPages(1);
+    }
+    setLoadingCheckIns(false);
   }, [selectedEventId, checkInPage, checkInLimit, methodFilter]);
 
   useEffect(() => {
@@ -171,147 +160,140 @@ export default function ReportsPage() {
     setCheckInPage(1);
   }, [selectedEventId, methodFilter]);
 
-  // 3. Load Legacy Data for Selected Event
+  // 4. Event report, invitee log, session and activity data for the selected event
   useEffect(() => {
-    if (!selectedEventId) return;
+    if (!selectedEventId) {
+      setEventReport(null);
+      setInviteeLogs([]);
+      setSessionsReport([]);
+      setSessionColumns([]);
+      setAccessLogs([]);
+      return;
+    }
 
+    let cancelled = false;
     async function loadEventDetails() {
-      setLoading(true);
-      const matchedEvt = allEventsList.find((e) => (e._id || e.id) === selectedEventId);
-      if (matchedEvt) {
-        setSelectedEventTitle(matchedEvt.title || matchedEvt.eventName || "Untitled Event");
-        setSelectedEventDates({
-          start: matchedEvt.startDate || matchedEvt.schedule?.start || "25/11/2026 09:30 AM",
-          end: matchedEvt.endDate || matchedEvt.schedule?.end || "26/11/2026 06:00 PM",
-        });
+      setLoadingDetails(true);
+      setDetailsError(null);
+
+      const [reportRes, inviteesRes, allCheckInsRes, auditRes] = await Promise.all([
+        reportService.getEventReport(selectedEventId),
+        inviteeService.getInvitees(selectedEventId),
+        checkInService.getCheckIns(selectedEventId, { page: 1, limit: 1000 }),
+        auditLogService.getAuditLogs({ eventId: selectedEventId, limit: 100 }),
+      ]);
+      if (cancelled) return;
+
+      if (!reportRes.success || !reportRes.data) {
+        setDetailsError(reportRes.message || "Failed to load the event report.");
       }
+      const report = reportRes.success ? reportRes.data || null : null;
+      setEventReport(report);
 
-      // Fetch invitees
-      let invitees: any[] = [];
-      try {
-        const invRes = await inviteeService.getInvitees(selectedEventId);
-        if (invRes?.success && Array.isArray(invRes.data)) {
-          invitees = invRes.data;
-        }
-      } catch (e) {}
+      const sessions = report?.sessionReports || [];
+      setSessionColumns(sessions.map((s) => ({ id: String(s.sessionId), name: s.name })));
+      setSessionsReport(
+        sessions.map((s, idx) => ({
+          id: idx + 1,
+          name: s.name,
+          dateTime: s.schedule?.start ? new Date(s.schedule.start).toLocaleString() : "TBD",
+          invitees: s.invitedCount ?? 0,
+          attendees: s.attendeeCount ?? s.checkInCount ?? 0,
+          accessControl: ACCESS_CONTROL_LABELS[s.accessControl || ""] || s.accessControl || "—",
+          systemUsers: String(s.systemUsers ?? 0),
+        }))
+      );
 
-      if (invitees.length === 0) {
-        const keysToTry = [
-          `app_local_invitees_${selectedEventId}`,
-          "app_local_invitees_1",
-          "app_local_invitees_draft",
-          "app_local_invitees",
-        ];
-        for (const k of keysToTry) {
-          const cached = localStorage.getItem(k);
-          if (cached) {
-            try {
-              const parsed = JSON.parse(cached);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                invitees = parsed;
-                break;
-              }
-            } catch (err) {}
-          }
-        }
-      }
+      // Per-invitee check-in summary built from real check-in records
+      const checkIns: CheckInRecord[] = allCheckInsRes.success && Array.isArray(allCheckInsRes.data) ? allCheckInsRes.data : [];
+      const byInvitee = new Map<string, CheckInRecord[]>();
+      checkIns.forEach((ci) => {
+        const id = ci.invitee?._id ? String(ci.invitee._id) : "";
+        if (!id) return;
+        byInvitee.set(id, [...(byInvitee.get(id) || []), ci]);
+      });
 
-      const formattedInvLogs: InviteeLog[] = invitees.map((inv, idx) => ({
-        id: inv._id || inv.id || `inv_${idx + 1}`,
-        name: inv.name || `Invitee ${idx + 1}`,
-        mobile: inv.mobile || inv.phone || "+919000000000",
-        invitationStatus: inv.status !== "Sending Failed" ? "Successfully Send" : "Sending failed",
-        rsvpStatus: inv.rsvpStatus === "declined" ? "Declined" : inv.rsvpStatus === "accepted" ? "Accepted" : "Pending",
-        checkInStatus: inv.entry !== false ? "Checked-in" : "Not Checked-in",
-        lastCheckInTime: "10.15 am",
-        entrySession: inv.entry !== false,
-        lunchSession: inv.lunch !== false,
-      }));
+      const invitees: any[] = inviteesRes.success && Array.isArray(inviteesRes.data) ? inviteesRes.data : [];
+      setInviteeLogs(
+        invitees.map((inv) => {
+          const id = String(inv._id || inv.id);
+          const records = byInvitee.get(id) || [];
+          const sessionCheckIns: Record<string, boolean> = {};
+          records.forEach((r) => {
+            if (r.session?._id) sessionCheckIns[String(r.session._id)] = true;
+          });
+          const attendedSessions = Object.keys(sessionCheckIns).length;
+          const latest = records.reduce<string | null>(
+            (acc, r) => (!acc || new Date(r.checkInAt) > new Date(acc) ? r.checkInAt : acc),
+            null
+          );
+          const invitationStatus = String(inv.invitationStatus || "PENDING").toUpperCase();
+          const rsvp = String(inv.rsvpStatus || "PENDING").toUpperCase();
+          return {
+            id,
+            name: inv.name || "",
+            mobile: inv.mobile || "—",
+            invitationStatus: invitationStatus === "SENT" ? "Sent" : invitationStatus === "FAILED" ? "Failed" : "Pending",
+            rsvpStatus: rsvp === "ACCEPTED" ? "Accepted" : rsvp === "DECLINED" ? "Declined" : "Pending",
+            checkInStatus:
+              records.length === 0
+                ? "Not Checked-in"
+                : sessions.length > 0 && attendedSessions > 0 && attendedSessions < sessions.length
+                  ? "Partially Checked-in"
+                  : "Checked-in",
+            lastCheckInTime: latest ? new Date(latest).toLocaleString() : "—",
+            sessionCheckIns,
+          } as InviteeLog;
+        })
+      );
 
-      // Fetch sessions
-      let sessions: any[] = [];
-      try {
-        const sRes = await sessionService.getSessions(selectedEventId);
-        if (sRes?.success && Array.isArray(sRes.data)) {
-          sessions = sRes.data;
-        }
-      } catch (e) {}
+      const logs: any[] = auditRes.success && Array.isArray(auditRes.data) ? auditRes.data : [];
+      setAccessLogs(
+        logs.map((log) => ({
+          id: log._id,
+          userType: ROLE_LABELS[log.actorType] || log.actorType || "—",
+          dateTime: log.createdAt ? new Date(log.createdAt).toLocaleString() : "—",
+          action: log.action,
+          status: log.status === "FAILED" ? "failed" : "Successful",
+        }))
+      );
 
-      if (sessions.length === 0) {
-        try {
-          const cachedSess = localStorage.getItem(`app_local_sessions_${selectedEventId}`) || localStorage.getItem("app_local_sessions_1");
-          if (cachedSess) sessions = JSON.parse(cachedSess);
-        } catch (e) {}
-      }
-
-      if (sessions.length === 0) {
-        sessions = [
-          { id: "1", name: "Session 1 - Entry Session", accessControl: "No Restrictions", invitesCount: invitees.length },
-          { id: "2", name: "Session 2 - Lunch Session", accessControl: "Only Once", invitesCount: invitees.length },
-        ];
-      }
-
-      const formattedSessLogs: SessionReport[] = sessions.map((s, idx) => ({
-        id: idx + 1,
-        name: s.name || s.title || `Session ${idx + 1}`,
-        dateTime: s.startTime || "25/11/2026 10.00 am",
-        invitees: s.invitesCount || invitees.length,
-        attendees: Math.floor((s.invitesCount || invitees.length) * 0.85),
-        accessControl: s.accessControl || "No Restrictions",
-        systemUsers: String(systemUsersCount || 5),
-      }));
-
-      // Access logs from real Audit Log Service
-      let formattedAccessLogs: AccessLog[] = [];
-      try {
-        const auditRes = await auditLogService.getAuditLogs();
-        if (auditRes?.success && Array.isArray(auditRes.data) && auditRes.data.length > 0) {
-          formattedAccessLogs = auditRes.data.map((log: any, idx: number) => ({
-            id: log._id || `acc_${idx + 1}`,
-            userType: log.performedBy?.role || log.userType || "System User",
-            dateTime: log.createdAt ? new Date(log.createdAt).toLocaleString() : "—",
-            action: log.action || log.description || "System Activity",
-            status: log.status || "Successful",
-          }));
-        }
-      } catch (e) {}
-
-      if (formattedAccessLogs.length === 0) {
-        formattedAccessLogs = [
-          { id: "acc_1", userType: "Admin", dateTime: "25/11/2026 10:12 AM", action: "Invitee List Exported", status: "Successful" },
-          { id: "acc_2", userType: "System User", dateTime: "25/11/2026 10:30 AM", action: "Invitee Checked In", status: "Successful" },
-          { id: "acc_3", userType: "Event Organizer", dateTime: "25/11/2026 11:00 AM", action: "Session Updated", status: "Successful" },
-        ];
-      }
-
-      setInviteeLogs(formattedInvLogs);
-      setSessionsReport(formattedSessLogs);
-      setAccessLogs(formattedAccessLogs);
-      setLoading(false);
+      setLoadingDetails(false);
     }
 
     loadEventDetails();
-  }, [selectedEventId, allEventsList, systemUsersCount]);
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedEventId, reloadKey]);
 
   const downloadReportCSV = () => {
     let content = "";
     if (activeTab === "checkins") {
       content = "Invitee,Session,Check-In Method,Check-In Time,Checked In By,RSVP Status\n" +
         checkInLogs.map(log => {
-          const invName = typeof log.invitee === "object" ? log.invitee?.name || "Attendee" : "Attendee";
-          const sessName = typeof log.session === "object" ? log.session?.name || "Event Gate" : "Event Gate";
-          const staffName = typeof log.checkedInBy === "object" ? log.checkedInBy?.fullName || log.checkedInBy?.email || "Staff" : String(log.checkedInBy || "Staff");
-          return `"${invName}","${sessName}","${log.checkInMethod}","${log.checkInAt}","${staffName}","${(log.invitee as any)?.rsvpStatus || "CONFIRMED"}"`;
+          const staff = typeof log.checkedInBy === "object" ? log.checkedInBy?.fullName || log.checkedInBy?.email : log.checkedInBy;
+          return [
+            log.invitee?.name,
+            log.session?.name || "Event entry",
+            log.checkInMethod,
+            log.checkInAt ? new Date(log.checkInAt).toLocaleString() : "",
+            staff,
+            log.invitee?.rsvpStatus,
+          ].map(csvCell).join(",");
         }).join("\n");
     } else if (activeTab === "invitees") {
-      content = "Invitee Name,Mobile No.,Invitation Status,RSVP Status,Check-in Status,Last Check-in Time,Entry Session,Lunch Session\n" +
-        inviteeLogs.map(i => `"${i.name}","${i.mobile}","${i.invitationStatus}","${i.rsvpStatus}","${i.checkInStatus}","${i.lastCheckInTime}",${i.entrySession ? "Yes" : "No"},${i.lunchSession ? "Yes" : "No"}`).join("\n");
+      content = ["Invitee Name", "Mobile No.", "Invitation Status", "RSVP Status", "Check-in Status", "Last Check-in Time", ...sessionColumns.map((c) => c.name)].map(csvCell).join(",") + "\n" +
+        inviteeLogs.map(i => [
+          i.name, i.mobile, i.invitationStatus, i.rsvpStatus, i.checkInStatus, i.lastCheckInTime,
+          ...sessionColumns.map((c) => (i.sessionCheckIns[c.id] ? "Yes" : "No")),
+        ].map(csvCell).join(",")).join("\n");
     } else if (activeTab === "access") {
       content = "User Type,Date & Time,Action,Status\n" +
-        accessLogs.map(a => `"${a.userType}","${a.dateTime}","${a.action}","${a.status}"`).join("\n");
+        accessLogs.map(a => [a.userType, a.dateTime, a.action, a.status].map(csvCell).join(",")).join("\n");
     } else {
       content = "#,Session Name,Date & Time,Invitees,Attendees,Access Control,System Users\n" +
-        sessionsReport.map(s => `${s.id},"${s.name}","${s.dateTime}",${s.invitees},${s.attendees},"${s.accessControl}","${s.systemUsers}"`).join("\n");
+        sessionsReport.map(s => [s.id, s.name, s.dateTime, s.invitees, s.attendees, s.accessControl, s.systemUsers].map(csvCell).join(",")).join("\n");
     }
 
     const blob = new Blob([content], { type: "text/csv" });
@@ -320,6 +302,7 @@ export default function ReportsPage() {
     a.href = url;
     a.download = `report_${activeTab}_logs.csv`;
     a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   const filteredCheckInLogs = checkInLogs.filter(log => {
@@ -347,7 +330,6 @@ export default function ReportsPage() {
     s.name.toLowerCase().includes(tableSearch.toLowerCase())
   );
 
-  const totalCheckedInCount = checkInTotal || checkInLogs.length;
 
   return (
     <div className="w-full min-h-full bg-white text-gray-900 font-sans select-none">
@@ -370,30 +352,66 @@ export default function ReportsPage() {
           selectedEvent={selectedEventId}
           setSelectedEvent={setSelectedEventId}
           onDownloadReport={downloadReportCSV}
-          organizerOptions={organizerOptions}
-          eventOptions={eventOptions}
+          organizerOptions={isAdmin ? organizerOptions : [{ value: "", label: "My Events" }]}
+          eventOptions={eventOptions.length > 0 ? eventOptions : [{ value: "", label: loadingEvents ? "Loading events..." : "No events" }]}
         />
 
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{selectedEventTitle}</h2>
-            <span className="border border-orange-400 text-[#FF5B22] rounded-md px-2 py-0.5 text-[10px] font-semibold bg-orange-50/50">
-              Personal Event
-            </span>
+        {pageError && (
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-md text-xs font-medium break-words">{pageError}</div>
+        )}
+
+        {!loadingEvents && allEventsList.length === 0 && !pageError ? (
+          <div className="border border-dashed border-gray-200 rounded-md py-16 text-center text-sm font-medium text-gray-500">
+            No events found{selectedOrganizer ? " for this organizer" : ""}. Reports appear once an event exists.
           </div>
-          <p className="text-xs text-gray-500 font-medium">
-            <span className="font-semibold text-gray-700">Start:</span> {selectedEventDates.start} | <span className="font-semibold text-gray-700">End:</span> {selectedEventDates.end}
-          </p>
-        </div>
+        ) : (
+          <>
+            <div className="space-y-1 min-w-0">
+              <div className="flex items-center gap-3 flex-wrap">
+                <h2 className="text-2xl font-bold text-gray-900 tracking-tight break-words min-w-0">
+                  {loadingEvents ? "Loading..." : selectedEventTitle}
+                </h2>
+                {selectedEvent?.categoryId?.name && (
+                  <span className="border border-orange-400 text-[#FF5B22] rounded-md px-2 py-0.5 text-[10px] font-semibold bg-orange-50/50">
+                    {selectedEvent.categoryId.name}
+                  </span>
+                )}
+              </div>
+              {selectedEvent && (
+                <p className="text-xs text-gray-500 font-medium">
+                  <span className="font-semibold text-gray-700">Start:</span> {formatDate(selectedEvent.schedule?.start)} | <span className="font-semibold text-gray-700">End:</span> {formatDate(selectedEvent.schedule?.end)}
+                </p>
+              )}
+            </div>
 
-        <ReportsStatsCards
-          totalInvitees={inviteeLogs.length || 10}
-          totalAttendees={totalCheckedInCount}
-          totalSessions={sessionsReport.length || 2}
-          systemUsers={systemUsersCount || 5}
-        />
+            {detailsError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-md text-xs font-medium flex items-center justify-between gap-3">
+                <span className="break-words min-w-0">{detailsError}</span>
+                <button type="button" onClick={() => setReloadKey((k) => k + 1)} className="font-semibold shrink-0 cursor-pointer underline">
+                  Retry
+                </button>
+              </div>
+            )}
 
-        <ReportsCharts />
+            <ReportsStatsCards
+              totalInvitees={eventReport?.totalInvitees ?? 0}
+              totalAttendees={eventReport?.uniqueAttendees ?? 0}
+              totalSessions={eventReport?.totalSessions ?? 0}
+              systemUsers={eventReport?.totalSystemUsers ?? 0}
+            />
+
+            <ReportsCharts
+              loading={loadingDetails}
+              delivery={eventReport?.deliverySummary}
+              sessions={(eventReport?.sessionReports || []).map((sr) => ({
+                id: String(sr.sessionId),
+                name: sr.name,
+                invited: sr.invitedCount ?? 0,
+                attended: sr.attendeeCount ?? sr.checkInCount ?? 0,
+              }))}
+            />
+          </>
+        )}
 
         <ReportsLogsTable
           activeTab={activeTab}
@@ -414,6 +432,8 @@ export default function ReportsPage() {
           inviteeLogs={filteredInviteeLogs}
           accessLogs={filteredAccessLogs}
           sessionsReport={filteredSessions}
+          sessionColumns={sessionColumns}
+          loadingDetails={loadingDetails}
         />
       </div>
 
@@ -425,6 +445,7 @@ export default function ReportsPage() {
         eventName={selectedEventTitle}
         onCheckInSuccess={() => {
           loadCheckInLogs();
+          setReloadKey((k) => k + 1);
         }}
       />
     </div>

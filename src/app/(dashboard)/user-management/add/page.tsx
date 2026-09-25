@@ -1,62 +1,77 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { userService } from "@/services/userService";
+import { UserData } from "@/services/tokenStorage";
 import UserNavDropdown from "@/components/common/UserNavDropdown";
-import { useAuth } from "@/context/AuthContext";
 
 export default function AddUserPage() {
-  const { user } = useAuth();
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [formData, setFormData] = useState({
     userName: "",
     contactNo: "",
     email: "",
+    password: "",
   });
-  const [isAddedSuccess, setIsAddedSuccess] = useState(false);
+  const [addedUserName, setAddedUserName] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [systemUsers, setSystemUsers] = useState<UserData[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const loadSystemUsers = useCallback(async () => {
+    setLoadingUsers(true);
+    setLoadError(null);
+    const res = await userService.getUsers("SYSTEM_USER");
+    if (res.success && Array.isArray(res.data)) {
+      setSystemUsers(res.data.filter((u) => u.role === "SYSTEM_USER"));
+    } else {
+      setSystemUsers([]);
+      setLoadError(res.message || "Failed to load system users.");
+    }
+    setLoadingUsers(false);
+  }, []);
+
+  useEffect(() => {
+    loadSystemUsers();
+  }, [loadSystemUsers]);
 
   const handleAddUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.userName) return;
+    if (!formData.userName.trim()) return;
 
-    const newUserObj = {
-      id: `usr_${Date.now()}`,
-      name: formData.userName,
-      fullName: formData.userName,
-      email: formData.email,
-      phone: formData.contactNo,
-      assignedCountText: "0 Event & 0 Sessions",
-      eventsList: [],
-    };
+    setIsSubmitting(true);
+    setFormError(null);
+    const res = await userService.createUser({
+      fullName: formData.userName.trim(),
+      email: formData.email.trim(),
+      phone: formData.contactNo.trim() || undefined,
+      password: formData.password,
+      role: "SYSTEM_USER",
+    });
+    setIsSubmitting(false);
 
-    try {
-      const keys = ["app_local_system_users", "app_local_users"];
-      keys.forEach((k) => {
-        const stored = localStorage.getItem(k);
-        let list = stored ? JSON.parse(stored) : [];
-        if (!Array.isArray(list)) list = [];
-        // Avoid duplicate emails/names if re-added
-        list = [newUserObj, ...list.filter((u: any) => u.email !== formData.email && u.name !== formData.userName)];
-        localStorage.setItem(k, JSON.stringify(list));
-      });
-    } catch (e) { }
-
-    try {
-      await userService.createUser({
-        fullName: formData.userName,
-        email: formData.email,
-        phone: formData.contactNo,
-        role: "SYSTEM_USER",
-      });
-    } catch (err) {
-      console.error("Failed to create user:", err);
-    } finally {
-      setIsAddedSuccess(true);
-      setIsAddUserModalOpen(false);
-      setFormData({ userName: "", contactNo: "", email: "" });
+    if (!res.success) {
+      setFormError(res.message || "Failed to create user.");
+      return;
     }
+
+    setAddedUserName(formData.userName.trim());
+    setIsAddUserModalOpen(false);
+    setFormData({ userName: "", contactNo: "", email: "", password: "" });
+    await loadSystemUsers();
   };
+
+  const query = searchQuery.trim().toLowerCase();
+  const filteredUsers = systemUsers.filter((u) =>
+    !query ||
+    (u.fullName || "").toLowerCase().includes(query) ||
+    (u.email || "").toLowerCase().includes(query) ||
+    (u.phone || "").includes(query)
+  );
 
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-white">
@@ -113,34 +128,72 @@ export default function AddUserPage() {
           </div>
 
           {/* Success Notification Banner */}
-          {isAddedSuccess && (
-            <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-md text-xs font-semibold text-center animate-in fade-in">
-              User &quot;{formData.userName || "New User"}&quot; added successfully!
+          {addedUserName && (
+            <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-md text-xs font-semibold text-center animate-in fade-in break-words">
+              User &quot;{addedUserName}&quot; added successfully!
             </div>
           )}
 
-          {/* Empty State Container (Image 1) */}
-          <div className="flex-1 flex flex-col items-center justify-center my-auto py-16 space-y-4">
-            {/* 3 People Icon */}
-            <div className="w-20 h-20 text-gray-300 flex items-center justify-center">
-              <svg className="w-16 h-16" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                <path d="M18 11c1.66 0 3-1.34 3-3s-1.34-3-3-3c-.25 0-.49.04-.71.11.45.82.71 1.76.71 2.76 0 1.01-.26 1.95-.71 2.78.22.07.46.1.71.1zm.9 3.01C20.2 14.86 21 16.02 21 17v2h3v-2c0-1.8-3.03-2.79-5.1-2.99z" />
-                <path d="M6 11c.25 0 .49-.03.71-.1-.45-.83-.71-1.77-.71-2.78 0-1 .26-1.94.71-2.76C6.49 5.04 6.25 5 6 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-.9 3.01C3.03 14.21 0 15.2 0 17v2h3v-2c0-.98.8-2.14 2.1-2.99z" />
-              </svg>
+          {loadingUsers ? (
+            <div className="flex-1 flex items-center justify-center py-16 text-xs font-semibold text-gray-500">
+              Loading system users...
             </div>
-
-            <p className="text-sm font-semibold text-gray-600">
-              No users added yet. Add users now.
-            </p>
-
-            <button
-              onClick={() => setIsAddUserModalOpen(true)}
-              className="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-[#FF5B22] font-semibold text-xs rounded-md transition-colors cursor-pointer"
-            >
-              Add User
-            </button>
-          </div>
+          ) : loadError ? (
+            <div className="flex-1 flex flex-col items-center justify-center py-16 space-y-3">
+              <p className="text-sm font-semibold text-rose-600 text-center break-words">{loadError}</p>
+              <button
+                onClick={() => loadSystemUsers()}
+                className="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-[#FF5B22] font-semibold text-xs rounded-md transition-colors cursor-pointer"
+              >
+                Retry
+              </button>
+            </div>
+          ) : systemUsers.length === 0 ? (
+            /* Empty State Container (Image 1) */
+            <div className="flex-1 flex flex-col items-center justify-center my-auto py-16 space-y-4">
+              <div className="w-20 h-20 text-gray-300 flex items-center justify-center">
+                <svg className="w-16 h-16" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                </svg>
+              </div>
+              <p className="text-sm font-semibold text-gray-600">
+                No users added yet. Add users now.
+              </p>
+              <button
+                onClick={() => setIsAddUserModalOpen(true)}
+                className="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-[#FF5B22] font-semibold text-xs rounded-md transition-colors cursor-pointer"
+              >
+                Add User
+              </button>
+            </div>
+          ) : (
+            <div className="border border-gray-200 rounded-md overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-gray-50 text-gray-500">
+                  <tr>
+                    <th className="py-3 px-4 font-medium">Name</th>
+                    <th className="py-3 px-4 font-medium">Email</th>
+                    <th className="py-3 px-4 font-medium">Contact No</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 text-gray-800">
+                  {filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="py-8 text-center text-gray-400">No users match your search.</td>
+                    </tr>
+                  ) : (
+                    filteredUsers.map((u) => (
+                      <tr key={u._id}>
+                        <td className="py-3 px-4 font-semibold text-gray-900 break-words max-w-[240px]">{u.fullName}</td>
+                        <td className="py-3 px-4 text-gray-600 break-all max-w-[280px]">{u.email}</td>
+                        <td className="py-3 px-4 text-gray-600 whitespace-nowrap">{u.phone || "—"}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </main>
 
       {/* Add User Modal (Image 2) */}
@@ -207,6 +260,27 @@ export default function AddUserPage() {
                 />
               </div>
 
+              {/* Temporary Password */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-800">
+                  Temporary Password<span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                  placeholder="At least 6 characters"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-md text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#FF5B22] transition-colors"
+                />
+              </div>
+
+              {formError && (
+                <p className="text-xs font-medium text-rose-600 break-words">{formError}</p>
+              )}
+
               {/* Buttons */}
               <div className="pt-2 pb-6 flex items-center justify-end gap-3">
                 <button
@@ -218,9 +292,10 @@ export default function AddUserPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-xs"
+                  disabled={isSubmitting}
+                  className="px-6 py-2 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Add
+                  {isSubmitting ? "Adding..." : "Add"}
                 </button>
               </div>
             </form>

@@ -2,13 +2,21 @@
 
 import React from "react";
 
-export default function EarningsStatsRow() {
+interface EarningsStatsRowProps {
+  estimatedTotal: number;
+  organizersBilled: number;
+  loading?: boolean;
+}
+
+export default function EarningsStatsRow({ estimatedTotal, organizersBilled, loading = false }: EarningsStatsRowProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div className="bg-white border border-gray-200 rounded-md p-6 shadow-2xs flex items-center justify-between">
         <div>
-          <p className="text-xs font-medium text-gray-500">Total Earning</p>
-          <h3 className="text-3xl font-bold text-gray-900 tracking-tight mt-1">$50k</h3>
+          <p className="text-xs font-medium text-gray-500">Total Earning (estimated)</p>
+          <h3 className="text-3xl font-bold text-gray-900 tracking-tight mt-1">
+            {loading ? "…" : `$${estimatedTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+          </h3>
         </div>
         <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center shrink-0">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -20,7 +28,7 @@ export default function EarningsStatsRow() {
       <div className="bg-white border border-gray-200 rounded-md p-6 shadow-2xs flex items-center justify-between">
         <div>
           <p className="text-xs font-medium text-gray-500">Total Organizer Billed</p>
-          <h3 className="text-3xl font-bold text-gray-900 tracking-tight mt-1">50K</h3>
+          <h3 className="text-3xl font-bold text-gray-900 tracking-tight mt-1">{loading ? "…" : organizersBilled}</h3>
         </div>
         <div className="w-12 h-12 rounded-full bg-orange-50 text-[#FF5B22] flex items-center justify-center shrink-0">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

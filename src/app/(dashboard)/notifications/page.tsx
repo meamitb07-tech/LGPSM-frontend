@@ -56,6 +56,7 @@ export default function NotificationsPage() {
         setNotifications(mapped);
       } else {
         setNotifications([]);
+        setErrorFeedback(res.message || "Failed to load notifications.");
       }
     } catch (err: any) {
       console.error("Failed to fetch notifications:", err);
@@ -72,7 +73,11 @@ export default function NotificationsPage() {
 
   const handleMarkAllRead = async () => {
     try {
-      await notificationService.markAllAsRead();
+      const res = await notificationService.markAllAsRead();
+      if (!res.success) {
+        setErrorFeedback(res.message || "Failed to mark notifications as read.");
+        return;
+      }
       setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
     } catch (err) {
       console.error("Failed to mark all as read:", err);
@@ -81,7 +86,11 @@ export default function NotificationsPage() {
 
   const handleMarkSingleRead = async (id: string) => {
     try {
-      await notificationService.markAsRead(id);
+      const res = await notificationService.markAsRead(id);
+      if (!res.success) {
+        setErrorFeedback(res.message || "Failed to mark notification as read.");
+        return;
+      }
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, unread: false } : n))
       );
@@ -95,7 +104,11 @@ export default function NotificationsPage() {
     try {
       // Optimistic update for instant real-time feedback
       setNotifications((prev) => prev.filter((n) => n.id !== id));
-      await notificationService.deleteNotification(id);
+      const res = await notificationService.deleteNotification(id);
+      if (!res.success) {
+        setErrorFeedback(res.message || "Failed to clear notification.");
+        fetchNotifications();
+      }
     } catch (err: any) {
       console.error("Failed to clear notification:", err);
       setErrorFeedback("Failed to clear notification.");
@@ -111,7 +124,11 @@ export default function NotificationsPage() {
     try {
       // Optimistic update for instant real-time feedback
       setNotifications([]);
-      await notificationService.clearAllNotifications();
+      const res = await notificationService.clearAllNotifications();
+      if (!res.success) {
+        setErrorFeedback(res.message || "Failed to clear all notifications.");
+        fetchNotifications();
+      }
     } catch (err: any) {
       console.error("Failed to clear all notifications:", err);
       setErrorFeedback("Failed to clear all notifications.");

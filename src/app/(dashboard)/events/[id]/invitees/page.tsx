@@ -102,12 +102,12 @@ export default function InviteesManagementPage() {
     const matchedEventObj = eventsOptions.find((e) => e.id === activeEvtId);
 
     // Derive event date/time from DB event details
-    let eventDate = "15 OCT 2026";
-    let dayOfWeek = "THURSDAY";
-    let startTime = "09:00 AM";
-    let venue = "RCCIIT AUDITORIUM";
-    let locationSub = "KOLKATA, WB";
-    let eventTitle = matchedEventObj?.title || "TECH SUMMIT 2026";
+    let eventDate = "DATE TBA";
+    let dayOfWeek = "";
+    let startTime = "TIME TBA";
+    let venue = "VENUE TBA";
+    let locationSub = "";
+    let eventTitle = matchedEventObj?.title || "";
 
     if (eventDetails) {
       eventTitle = eventDetails.title || eventTitle;
@@ -147,7 +147,7 @@ export default function InviteesManagementPage() {
       .map((s: any) => {
         const sessStart = s.schedule?.start || s.startTime;
         const sessEnd = s.schedule?.end || s.endTime;
-        let st = "10:00 AM";
+        let st = "TBA";
         let et: string | undefined;
         if (sessStart) {
           const d = new Date(sessStart);
@@ -166,26 +166,27 @@ export default function InviteesManagementPage() {
       });
 
     if (cardSessions.length === 0) {
-      cardSessions = sessionsOptions.map((s) => ({ id: s.id, name: s.name, startTime: "10:00 AM", endTime: undefined as string | undefined }));
+      cardSessions = sessionsOptions.map((s) => ({ id: s.id, name: s.name, startTime: "TBA", endTime: undefined as string | undefined }));
     }
 
-    // Build a unique invitation URL for this invitee for QR generation
-    const invitationUrl = `${window.location.origin}/invitation/${invitee._id || invitee.id || "preview"}`;
+    // The real invitation link carries a secret token that only exists when the backend sends it,
+    // so the on-screen preview does not embed a (non-working) link.
+    const invitationUrl = undefined;
 
     return {
       invitee: {
         id: invitee._id || invitee.id,
         name: invitee.name || "Guest",
-        companyName: invitee.companyName || invitee.company || "LGPSM",
+        companyName: invitee.companyName || invitee.company || "",
       },
       event: {
         id: activeEvtId,
         title: eventTitle,
-        subtitle: "INNOVATE | COLLABORATE | LEAD",
+        subtitle: eventDetails?.description && eventDetails.description !== eventTitle ? String(eventDetails.description).slice(0, 60) : "",
         date: eventDate,
         dayOfWeek,
         startTime,
-        timeSub: "ONWARDS",
+        timeSub: "",
         venue,
         locationSub,
       },
@@ -201,11 +202,11 @@ export default function InviteesManagementPage() {
     }
     // Fallback if no invitee selected
     return {
-      invitee: { id: "preview", name: "Select an Invitee", companyName: "LGPSM" },
-      event: { id: eventId, title: "TECH SUMMIT 2026" },
+      invitee: { id: "preview", name: "Select an Invitee", companyName: "" },
+      event: { id: eventId, title: eventDetails?.title || "" },
       sessions: [],
     };
-  }, [previewingInvitee, buildCardDataForInvitee, eventId]);
+  }, [previewingInvitee, buildCardDataForInvitee, eventId, eventDetails]);
 
   const handleConfirmPermanentDelete = async (targetId: string) => {
     try {
@@ -214,10 +215,13 @@ export default function InviteesManagementPage() {
       );
       const realId = realItem?._id || realItem?.id || targetId;
 
-      if (realId && !realId.startsWith("inv_")) {
-        await inviteeService.deleteInvitee(realId);
+      const res = await inviteeService.deleteInvitee(realId);
+      if (!res.success) {
+        showAlert(res.message || "Failed to delete invitee.", "error");
+        return;
       }
       showAlert("Invitee permanently deleted.", "success");
+      notifyDbUpdate();
       await fetchInvitees();
     } catch (err: any) {
       console.error("Error deleting invitee:", err);
@@ -233,12 +237,14 @@ export default function InviteesManagementPage() {
       );
       const realId = realItem?._id || realItem?.id || targetId;
 
-      if (realId && !realId.startsWith("inv_")) {
-        await inviteeService.updateInvitee(realId, {
-          name: updatedRow.name,
-          email: updatedRow.email,
-          mobile: updatedRow.phone || updatedRow.mobile,
-        });
+      const res = await inviteeService.updateInvitee(realId, {
+        name: updatedRow.name,
+        email: updatedRow.email,
+        mobile: updatedRow.phone || updatedRow.mobile,
+      });
+      if (!res.success) {
+        showAlert(res.message || "Failed to update invitee.", "error");
+        return;
       }
       showAlert("Invitee updated successfully.", "success");
       await fetchInvitees();
@@ -255,8 +261,10 @@ export default function InviteesManagementPage() {
       );
       const realId = realItem?._id || realItem?.id || targetId;
 
-      if (realId && !realId.startsWith("inv_")) {
-        await inviteeService.updateInvitee(realId, { rsvpStatus: newStatus });
+      const res = await inviteeService.updateInvitee(realId, { rsvpStatus: newStatus });
+      if (!res.success) {
+        showAlert(res.message || "Failed to update RSVP status.", "error");
+        return;
       }
       showAlert(`RSVP status updated to ${newStatus}.`, "success");
       await fetchInvitees();
@@ -269,7 +277,7 @@ export default function InviteesManagementPage() {
   // Load events list for filter dropdown
   useEffect(() => {
     async function loadEvents() {
-      let combined: { id: string; title: string }[] = [];
+      const combined: { id: string; title: string }[] = [];
       try {
         const res = await eventService.getEvents();
         const rawList = Array.isArray(res?.data) ? res.data : ((res?.data as any)?.events || []);
@@ -297,30 +305,15 @@ export default function InviteesManagementPage() {
     loadEvents();
   }, [eventId, fromSidebar]);
 
-  // Load sessions list for filter dropdown
+  // Session filter options derive from the sessions already loaded with the event details
   useEffect(() => {
-    async function loadSessions() {
-      const activeEvtId = selectedEventFilter || (!fromSidebar ? eventId : "");
-      if (!activeEvtId || activeEvtId === "1") {
-        setSessionsOptions([]);
-        return;
-      }
-
-      let mapped: { id: string; name: string }[] = [];
-      try {
-        const res = await sessionService.getSessions(activeEvtId);
-        if (res?.success && Array.isArray(res.data)) {
-          mapped = res.data.map((s: any, idx: number) => ({
-            id: s._id || s.id,
-            name: s.name || s.title || `Session ${idx + 1}`,
-          }));
-        }
-      } catch {}
-
-      setSessionsOptions(mapped);
-    }
-    loadSessions();
-  }, [eventId, selectedEventFilter, fromSidebar]);
+    setSessionsOptions(
+      sessionsDetails.map((s: any, idx: number) => ({
+        id: s._id || s.id,
+        name: s.name || s.title || `Session ${idx + 1}`,
+      }))
+    );
+  }, [sessionsDetails]);
 
   const fetchInvitees = async () => {
     const activeEvtId = selectedEventFilter || (!fromSidebar ? eventId : "");
@@ -335,7 +328,6 @@ export default function InviteesManagementPage() {
       const res = await inviteeService.getInvitees(activeEvtId);
       if (res.success && Array.isArray(res.data)) {
         setInvitees(res.data);
-        notifyDbUpdate();
       } else {
         setInvitees([]);
       }
@@ -390,24 +382,49 @@ export default function InviteesManagementPage() {
     );
   };
 
-  // WhatsApp Direct Web Link Handler
-  const handleSendWhatsAppDirect = (inviteeItem: any) => {
-    const cardData = buildCardDataForInvitee(inviteeItem);
-    const rawMobile = inviteeItem.mobile || inviteeItem.phone || "+91 99031 07102";
-    let cleaned = rawMobile.replace(/\D/g, "").replace(/^0+/, "");
-    if (cleaned.length === 10) cleaned = `91${cleaned}`;
+  // WhatsApp delivery for a single invitee goes through the backend so the invitee
+  // receives a link with a valid invitation token (never a locally-built link)
+  const handleSendWhatsAppDirect = async (inviteeItem: any) => {
+    const activeEvtId = selectedEventFilter || (!fromSidebar ? eventId : "");
+    const inviteeId = inviteeItem?._id || inviteeItem?.id;
+    if (!activeEvtId || activeEvtId === "1" || activeEvtId === "select" || !inviteeId) {
+      showAlert("Please select an event first.", "warning");
+      return;
+    }
+    if (!inviteeItem.mobile && !inviteeItem.phone) {
+      showAlert(`${inviteeItem.name || "This invitee"} has no mobile number, so WhatsApp delivery is not possible.`, "warning");
+      return;
+    }
 
-    const passUrl = cardData.invitationUrl || `${window.location.origin}/events/${eventId}/invitees`;
-    const text = `Dear ${inviteeItem.name},\n\nYou are cordially invited to ${cardData.event.title}!\n\n📅 Date: ${cardData.event.date || "TBA"}\n⏰ Time: ${cardData.event.startTime || "TBA"}\n📍 Venue: ${cardData.event.venue || "TBA"}\n\nView your official Invitation Pass & QR Code here:\n${passUrl}\n\nWe look forward to hosting you!`;
-
-    const waUrl = `https://api.whatsapp.com/send?phone=${cleaned}&text=${encodeURIComponent(text)}`;
-    window.open(waUrl, "_blank");
-
-    setStatusFeedback({
-      type: "success",
-      message: `Opened WhatsApp Web to send invitation card to ${inviteeItem.name} (${rawMobile}).`,
-    });
+    setSending(true);
+    setStatusFeedback(null);
+    try {
+      const res = await invitationService.sendInvitations(activeEvtId, {
+        inviteeIds: [inviteeId],
+        channel: "WHATSAPP",
+      });
+      const results = (res as any).results || res.data?.results || [];
+      const result = results[0];
+      if (result?.status === "SENT") {
+        setStatusFeedback({ type: "success", message: `Invitation sent to ${inviteeItem.name} via WhatsApp.`, details: results });
+      } else {
+        setStatusFeedback({
+          type: "error",
+          message: `WhatsApp delivery to ${inviteeItem.name} failed: ${result?.failureReason || res.message || "Unknown error"}`,
+          details: results,
+        });
+      }
+      await fetchInvitees();
+      await fetchInvitationHistory();
+    } catch (err: any) {
+      setStatusFeedback({ type: "error", message: err.message || "Error sending WhatsApp invitation." });
+    } finally {
+      setSending(false);
+    }
   };
+
+  // The event actually being managed (the dropdown selection when opened from the sidebar)
+  const activeEventId = selectedEventFilter || (!fromSidebar ? eventId : "");
 
   // Send Invitations Handler
   const handleSendInvitations = async () => {
@@ -420,7 +437,7 @@ export default function InviteesManagementPage() {
       setSending(true);
       setStatusFeedback(null);
 
-      const res = await invitationService.sendInvitations(eventId, {
+      const res = await invitationService.sendInvitations(activeEventId, {
         inviteeIds: selectedIds,
         channel: selectedChannel,
       });
@@ -500,7 +517,7 @@ export default function InviteesManagementPage() {
       setResending(true);
       setStatusFeedback(null);
 
-      const res = await invitationService.resendInvitations(eventId, {
+      const res = await invitationService.resendInvitations(activeEventId, {
         invitationIds: targetInvitationIds,
         channel: selectedChannel,
       });
@@ -560,7 +577,7 @@ export default function InviteesManagementPage() {
     }
 
     try {
-      const res = await inviteeService.bulkUpdateSessionAccess(eventId, {
+      const res = await inviteeService.bulkUpdateSessionAccess(activeEventId, {
         inviteeIds: selectedIds,
         sessionAccess: [{ sessionId: selectedSessionFilter, allowed: true }],
       });
@@ -752,7 +769,7 @@ export default function InviteesManagementPage() {
                     if (val) {
                       router.push(`/events/${val}/invitees`);
                     } else {
-                      router.push(`/events/1/invitees?from=sidebar`);
+                      router.push(`/events/select/invitees?from=sidebar`);
                     }
                   }}
                   options={[
@@ -1125,6 +1142,7 @@ export default function InviteesManagementPage() {
         onUploadSuccess={async (parsedList, uploadEventId) => {
           const targetEvt = uploadEventId || eventId;
           await fetchInvitees();
+          notifyDbUpdate();
           if (targetEvt && targetEvt !== eventId) {
             router.push(`/events/${targetEvt}/invitees`);
           }

@@ -210,6 +210,10 @@ export default function AssignedSystemUsersPage() {
   const handleAddUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!addUserData.userName || !addUserData.email) return;
+    if (!addUserData.password || addUserData.password.length < 6) {
+      setErrorFeedback("Please set a password of at least 6 characters for the new user.");
+      return;
+    }
 
     try {
       setSubmittingUser(true);
@@ -218,8 +222,8 @@ export default function AssignedSystemUsersPage() {
       const res = await userService.createUser({
         fullName: addUserData.userName,
         email: addUserData.email,
-        phone: addUserData.contactNo,
-        password: addUserData.password || "Password123!",
+        phone: addUserData.contactNo || undefined,
+        password: addUserData.password,
         role: "SYSTEM_USER",
       });
 
@@ -297,8 +301,8 @@ export default function AssignedSystemUsersPage() {
           sessionIds: selectedSessionIds,
         });
 
-        if (!res.success && res.message) {
-          errorMessages.push(res.message);
+        if (!res.success) {
+          errorMessages.push(res.message || "Assignment failed.");
         }
       }
 
@@ -306,8 +310,11 @@ export default function AssignedSystemUsersPage() {
         setErrorFeedback(errorMessages.join(". "));
       }
 
+      // Only confirm success when at least one assignment was actually saved
       setIsAssignModalOpen(false);
-      setIsAssignSuccessModalOpen(true);
+      if (errorMessages.length < selectedIds.length) {
+        setIsAssignSuccessModalOpen(true);
+      }
       await loadData();
       notifyDbUpdate();
     } catch (err: any) {
@@ -341,8 +348,13 @@ export default function AssignedSystemUsersPage() {
 
     try {
       setErrorFeedback(null);
+      const failures: string[] = [];
       for (const id of selectedIds) {
-        await userService.deleteUser(id);
+        const res = await userService.deleteUser(id);
+        if (!res.success) failures.push(res.message || "Failed to delete user.");
+      }
+      if (failures.length > 0) {
+        setErrorFeedback(`${failures.length} user(s) could not be deleted: ${failures[0]}`);
       }
       setSelectedIds([]);
       await loadData();

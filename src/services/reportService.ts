@@ -21,6 +21,9 @@ export interface EventReportData {
   attendanceRate: string;
   totalInvitees: number;
   totalCheckIns: number;
+  uniqueAttendees?: number;
+  totalSessions?: number;
+  totalSystemUsers?: number;
   rsvpSummary: { ACCEPTED: number; DECLINED: number; PENDING: number };
   deliverySummary: { SENT: number; PENDING: number; FAILED: number };
   checkInMethods: { QR: number; MANUAL: number };
@@ -28,6 +31,10 @@ export interface EventReportData {
     sessionId: string;
     name: string;
     checkInCount: number;
+    attendeeCount?: number;
+    invitedCount?: number;
+    systemUsers?: number;
+    accessControl?: string;
     schedule: { start: string; end: string };
   }[];
 }

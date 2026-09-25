@@ -3,15 +3,13 @@
 import React, { useState } from "react";
 import PricePerHeadCard from "@/components/settings/PricePerHeadCard";
 import PriceHistoryTable from "@/components/settings/PriceHistoryTable";
-import { initialPriceHistory } from "@/data/priceRateData";
 import { PriceHistoryRecord } from "@/types/priceRate";
-import { useAuth } from "@/context/AuthContext";
 import UserNavDropdown from "@/components/common/UserNavDropdown";
 
 export default function PriceRateSettingsPage() {
-  const { user } = useAuth();
   const [currentRate, setCurrentRate] = useState<number>(3.0);
-  const [history, setHistory] = useState<PriceHistoryRecord[]>(initialPriceHistory);
+  // No price-rate API exists yet: changes live only in this page session
+  const [history, setHistory] = useState<PriceHistoryRecord[]>([]);
 
   const handleSaveRate = (newRateVal: number) => {
     if (newRateVal === currentRate) return;
@@ -51,6 +49,9 @@ export default function PriceRateSettingsPage() {
 
       {/* Page Content */}
       <div className="p-6 max-w-7xl w-full mx-auto space-y-6 pb-24">
+        <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-md text-xs font-medium">
+          Price-rate changes are not stored on the server yet. They apply to this session only and reset on reload.
+        </div>
         <PricePerHeadCard currentRate={currentRate} onSaveRate={handleSaveRate} />
         <PriceHistoryTable history={history} />
       </div>

@@ -2,12 +2,17 @@ export interface InviteeLog {
   id: string;
   name: string;
   mobile: string;
-  invitationStatus: "Successfully Send" | "Sending failed";
+  invitationStatus: "Sent" | "Pending" | "Failed";
   rsvpStatus: "Accepted" | "Pending" | "Declined";
   checkInStatus: "Checked-in" | "Not Checked-in" | "Partially Checked-in";
   lastCheckInTime: string;
-  entrySession: boolean;
-  lunchSession: boolean;
+  // sessionId -> whether the invitee checked in to that session
+  sessionCheckIns: Record<string, boolean>;
+}
+
+export interface ReportSessionColumn {
+  id: string;
+  name: string;
 }
 
 export interface AccessLog {

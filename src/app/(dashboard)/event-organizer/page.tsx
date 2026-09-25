@@ -24,14 +24,19 @@ export default function AllOrganizersPage() {
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadOrganizers() {
       setLoading(true);
       let list: OrganizerRow[] = [];
+      setLoadError(null);
 
       try {
         const res = await userService.getUsers("ORGANIZER");
+        if (!res?.success) {
+          setLoadError(res?.message || "Failed to load organizers.");
+        }
         if (res?.success && Array.isArray(res.data)) {
           const organizerUsersOnly = res.data.filter((u: any) => u.role === "ORGANIZER");
           const apiOrgs = organizerUsersOnly.map((u: any, idx: number) => ({
@@ -39,31 +44,14 @@ export default function AllOrganizersPage() {
             name: u.fullName || u.name || "Event Organizer",
             email: u.email || "--",
             phone: u.phone || u.contactNo || "--",
-            status: (u.status || "Active") as any,
+            status: (u.isActive === false ? "In Active" : "Active") as any,
           }));
 
           list = apiOrgs;
         }
-      } catch (e) { }
-
-      try {
-        const stored = localStorage.getItem("app_local_organizers");
-        if (stored) {
-          const localOrgs: any[] = JSON.parse(stored);
-          localOrgs.forEach((lo) => {
-            const isNonOrg = lo.role === "ADMIN" || lo.role === "SYSTEM_USER" || (lo.email && lo.email.toLowerCase().includes("admin"));
-            if (!isNonOrg && !list.some((o) => o.id === lo.id || o.email === lo.email)) {
-              list.push({
-                id: lo.id,
-                name: lo.name || lo.fullName || "Event Organizer",
-                email: lo.email || "--",
-                phone: lo.phone || lo.contactNo || "--",
-                status: lo.status || "Active",
-              });
-            }
-          });
-        }
-      } catch (e) { }
+      } catch (e) {
+        setLoadError("Could not reach the server. Please try again.");
+      }
 
       setOrganizers(list);
       setLoading(false);
@@ -226,8 +214,14 @@ export default function AllOrganizersPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 text-gray-800">
-                  {filteredOrganizers.length === 0 && (
-                    <tr><td colSpan={6} className="py-12 text-center text-gray-400 text-sm">No organizer data available. Add an organizer to get started.</td></tr>
+                  {loading && (
+                    <tr><td colSpan={6} className="py-12 text-center text-gray-400 text-sm">Loading organizers...</td></tr>
+                  )}
+                  {!loading && loadError && (
+                    <tr><td colSpan={6} className="py-12 text-center text-rose-600 text-sm">{loadError}</td></tr>
+                  )}
+                  {!loading && !loadError && filteredOrganizers.length === 0 && (
+                    <tr><td colSpan={6} className="py-12 text-center text-gray-400 text-sm">No organizers found.</td></tr>
                   )}
                   {filteredOrganizers.map((org, idx) => {
                     const isSelected = selectedIds.includes(org.id);

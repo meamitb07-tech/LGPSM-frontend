@@ -21,7 +21,11 @@ import InviteesPreviewModal from "@/components/add-event/modals/InviteesPreviewM
 import SuccessModal from "@/components/add-event/modals/SuccessModal";
 
 function getFormattedCurrentDateTime(offsetHours: number = 0): string {
-  const date = new Date(Date.now() + offsetHours * 3600 * 1000);
+  return formatPickerDateTime(new Date(Date.now() + offsetHours * 3600 * 1000));
+}
+
+// Formats a date in the picker's "DD/MM/YY hh.mm AM" format
+function formatPickerDateTime(date: Date): string {
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   const yy = String(date.getFullYear()).slice(-2);
@@ -37,7 +41,7 @@ function getFormattedCurrentDateTime(offsetHours: number = 0): string {
 export default function EditEventPage() {
   const router = useRouter();
   const params = useParams();
-  const eventId = (params?.id as string) || "1";
+  const eventId = (params?.id as string) || "";
   const { user, isAuthenticated, isLoading, logout } = useAuth();
 
   const stepContentRef = useRef<HTMLDivElement>(null);
@@ -51,6 +55,7 @@ export default function EditEventPage() {
   
   const [eventData, setEventData] = useState<any>(null);
   const [isFetchingEvent, setIsFetchingEvent] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -60,12 +65,20 @@ export default function EditEventPage() {
         try {
           const res = await eventService.getEvent(eventId);
           if (res.success && res.data) {
-            setEventData(res.data);
-            setStartDate(res.data.startDate || getFormattedCurrentDateTime(0));
-            setEndDate(res.data.endDate || getFormattedCurrentDateTime(4));
+            const raw: any = res.data;
+            const locationText = typeof raw.location === "string" ? raw.location : raw.location?.address || "";
+            setEventData({ ...raw, venue: locationText });
+            // The backend stores the schedule as ISO dates under `schedule`
+            const start = raw.schedule?.start ? new Date(raw.schedule.start) : null;
+            const end = raw.schedule?.end ? new Date(raw.schedule.end) : null;
+            if (start && !isNaN(start.getTime())) setStartDate(formatPickerDateTime(start));
+            if (end && !isNaN(end.getTime())) setEndDate(formatPickerDateTime(end));
+          } else {
+            setLoadError(res.message || "Event not found or you do not have access to it.");
           }
         } catch (error) {
           console.error("Failed to fetch event:", error);
+          setLoadError("Could not reach the server. Please try again.");
         }
       }
       setIsFetchingEvent(false);
@@ -125,6 +138,20 @@ export default function EditEventPage() {
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
           Loading Edit Event...
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="w-full min-h-full flex items-center justify-center bg-[#F4F5F8] p-6">
+        <div className="max-w-md w-full bg-white border border-gray-200 rounded-md p-8 text-center space-y-4">
+          <h2 className="text-lg font-bold text-gray-900">Event unavailable</h2>
+          <p className="text-xs text-gray-500 break-words">{loadError}</p>
+          <Link href="/events" className="inline-block px-4 py-2 bg-[#FF5B22] hover:bg-[#E04B16] text-white rounded-md text-xs font-semibold">
+            Back to Events
+          </Link>
         </div>
       </div>
     );

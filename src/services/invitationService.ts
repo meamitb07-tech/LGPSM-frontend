@@ -1,4 +1,5 @@
 import { apiClient, ApiResponse } from "./apiClient";
+import { tokenStorage } from "./tokenStorage";
 
 export interface SendInvitationsPayload {
   inviteeIds: string[];
@@ -52,10 +53,10 @@ export interface PublicInvitationData {
     title: string;
     description?: string;
     format?: string;
-    location?: string;
+    location?: string | { address?: string };
     schedule?: {
-      startDate?: string;
-      endDate?: string;
+      start?: string;
+      end?: string;
     };
   };
   invitee: {
@@ -119,13 +120,27 @@ export const invitationService = {
     page = 1,
     limit = 50
   ): Promise<ApiResponse<GetInvitationsResponse>> {
-    return apiClient<GetInvitationsResponse>(
+    const res = await apiClient<GetInvitationsResponse>(
       `/api/v1/events/${eventId}/invitations?page=${page}&limit=${limit}`,
       {
         method: "GET",
       },
       true
     );
+    // This endpoint returns { invitations, total, page, totalPages } without the usual envelope
+    const raw = res as ApiResponse<GetInvitationsResponse> & Partial<GetInvitationsResponse>;
+    if (raw.success === undefined && Array.isArray(raw.invitations)) {
+      return {
+        success: true,
+        data: {
+          invitations: raw.invitations,
+          total: raw.total ?? raw.invitations.length,
+          page: raw.page ?? page,
+          totalPages: raw.totalPages ?? 1,
+        },
+      };
+    }
+    return res;
   },
 
   /**
@@ -154,15 +169,24 @@ export const invitationService = {
    * GET /api/v1/events/:eventId/invitations/preview?inviteeId=:inviteeId
    */
   async previewCardPNG(eventId: string, inviteeId?: string): Promise<Blob> {
-    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-    const token = typeof window !== "undefined" ? localStorage.getItem("app_auth_token") : null;
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
+    const token = tokenStorage.getAccessToken();
     const url = inviteeId
       ? `${API_BASE_URL}/api/v1/events/${eventId}/invitations/preview?inviteeId=${inviteeId}`
       : `${API_BASE_URL}/api/v1/events/${eventId}/invitations/preview`;
     const res = await fetch(url, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
-    if (!res.ok) throw new Error("Failed to fetch invitation card preview");
+    if (!res.ok) {
+      let message = "Failed to fetch invitation card preview";
+      try {
+        const body = await res.json();
+        if (body?.message) message = body.message;
+      } catch {
+        // non-JSON error body
+      }
+      throw new Error(message);
+    }
     return res.blob();
   },
 };

@@ -12,6 +12,7 @@ interface SessionData {
   endTime: string;
   accessControl: string;
   uploadedFileName?: string;
+  uploadedFile?: File;
   inviteesCount?: number;
   inviteesList?: any[];
   keepSameInviteesAs?: string;
@@ -136,7 +137,7 @@ export default function Step3Sessions({
 
   const handleRemoveFile = (id: string) => {
     setSessions(
-      sessions.map((s) => (s.id === id ? { ...s, uploadedFileName: undefined } : s))
+      sessions.map((s) => (s.id === id ? { ...s, uploadedFileName: undefined, uploadedFile: undefined, inviteesList: undefined, inviteesCount: undefined } : s))
     );
   };
 
@@ -163,11 +164,12 @@ export default function Step3Sessions({
 
       count = rows.length;
       if (rows.length > 0) {
+        // Preview only what the file contains; the backend import validates each row
         inviteesList = rows.map((row, idx) => ({
           id: String(idx + 1).padStart(2, "0"),
-          name: row[0] ? String(row[0]).trim() : `Invitee ${idx + 1}`,
-          email: row[1] ? String(row[1]).trim() : `invitee${idx + 1}@example.com`,
-          phone: row[2] ? String(row[2]).trim() : `+9190000000${idx}`,
+          name: row[0] ? String(row[0]).trim() : "",
+          email: row[1] ? String(row[1]).trim() : "",
+          phone: row[2] ? String(row[2]).trim() : "",
         }));
       }
     } catch (e) {
@@ -179,7 +181,7 @@ export default function Step3Sessions({
     }
 
     setSessions((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, uploadedFileName: file.name, inviteesCount: count, inviteesList } : s))
+      prev.map((s) => (s.id === id ? { ...s, uploadedFileName: file.name, uploadedFile: file, inviteesCount: count, inviteesList } : s))
     );
 
     try {
@@ -405,10 +407,10 @@ export default function Step3Sessions({
                     className="flex items-center gap-2 text-xs font-semibold text-gray-800 hover:text-[#FF5B22] cursor-pointer"
                   >
                     <ExcelLogo className="w-4 h-4 shrink-0" />
-                    <span>{sess.uploadedFileName} ({sess.inviteesCount || sess.inviteesList?.length || 8} invitees)</span>
+                    <span className="truncate max-w-[220px]" title={sess.uploadedFileName}>{sess.uploadedFileName} ({sess.inviteesCount ?? sess.inviteesList?.length ?? 0} invitees)</span>
                   </button>
                 ) : (
-                  <span className="text-gray-400 font-medium text-xs">No file choosn</span>
+                  <span className="text-gray-400 font-medium text-xs">No file chosen</span>
                 )}
 
                 {sess.uploadedFileName && (

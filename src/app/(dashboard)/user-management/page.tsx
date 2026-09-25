@@ -42,6 +42,9 @@ export default function AllUsersPage() {
 
       // 1. Fetch system users only (role === SYSTEM_USER)
       const usersRes = await userService.getUsers("SYSTEM_USER");
+      if (!usersRes?.success) {
+        setErrorFeedback(usersRes?.message || "Failed to load system users.");
+      }
       const rawUsers = Array.isArray(usersRes?.data) ? usersRes.data : [];
       const systemUsersOnly = rawUsers.filter((u) => u.role === "SYSTEM_USER");
 
@@ -191,8 +194,13 @@ export default function AllUsersPage() {
 
     try {
       setErrorFeedback(null);
+      const failures: string[] = [];
       for (const id of selectedIds) {
-        await userService.deleteUser(id);
+        const res = await userService.deleteUser(id);
+        if (!res.success) failures.push(res.message || "Failed to delete user.");
+      }
+      if (failures.length > 0) {
+        setErrorFeedback(`${failures.length} user(s) could not be deleted: ${failures[0]}`);
       }
       setSelectedIds([]);
       await fetchUsersAndAssignments();
@@ -255,8 +263,8 @@ export default function AllUsersPage() {
           sessionIds: selectedSessionIds,
         });
 
-        if (!res.success && res.message) {
-          errorMsgs.push(res.message);
+        if (!res.success) {
+          errorMsgs.push(res.message || "Assignment failed.");
         }
       }
 
@@ -264,8 +272,11 @@ export default function AllUsersPage() {
         setErrorFeedback(errorMsgs.join(". "));
       }
 
+      // Only confirm success when at least one assignment was actually saved
       setIsAssignModalOpen(false);
-      setIsAssignSuccessModalOpen(true);
+      if (errorMsgs.length < selectedIds.length) {
+        setIsAssignSuccessModalOpen(true);
+      }
       await fetchUsersAndAssignments();
     } catch (err: any) {
       setErrorFeedback(err.message || "Error assigning system users.");

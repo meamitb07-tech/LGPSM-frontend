@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { InviteeLog, AccessLog, SessionReport } from "@/types/reports";
+import { InviteeLog, AccessLog, SessionReport, ReportSessionColumn } from "@/types/reports";
 import { CheckInRecord } from "@/services/checkInService";
 
 interface ReportsLogsTableProps {
@@ -25,6 +25,8 @@ interface ReportsLogsTableProps {
   inviteeLogs?: InviteeLog[];
   accessLogs?: AccessLog[];
   sessionsReport?: SessionReport[];
+  sessionColumns?: ReportSessionColumn[];
+  loadingDetails?: boolean;
 }
 
 export default function ReportsLogsTable({
@@ -46,16 +48,26 @@ export default function ReportsLogsTable({
   inviteeLogs = [],
   accessLogs = [],
   sessionsReport = [],
+  sessionColumns = [],
+  loadingDetails = false,
 }: ReportsLogsTableProps) {
+  const statusRow = (colSpan: number, text: string) => (
+    <tr>
+      <td colSpan={colSpan} className="py-10 text-center text-gray-400 font-medium">
+        {text}
+      </td>
+    </tr>
+  );
+
   return (
     <div className="bg-white border border-gray-200 rounded-md shadow-2xs overflow-hidden">
       {/* Tabs Header */}
-      <div className="border-b border-gray-200 px-6 pt-4 flex items-center justify-between gap-4 text-xs">
-        <div className="flex items-center gap-8">
+      <div className="border-b border-gray-200 px-4 sm:px-6 pt-4 flex flex-wrap items-end justify-between gap-x-4 gap-y-2 text-xs">
+        <div className="flex items-center gap-5 sm:gap-8 overflow-x-auto max-w-full">
           <button
             type="button"
             onClick={() => setActiveTab("checkins")}
-            className={`pb-3 font-semibold transition-colors cursor-pointer relative ${
+            className={`pb-3 font-semibold transition-colors cursor-pointer relative whitespace-nowrap shrink-0 ${
               activeTab === "checkins"
                 ? "text-gray-900 border-b-2 border-[#FF5B22]"
                 : "text-gray-500 hover:text-gray-800"
@@ -67,7 +79,7 @@ export default function ReportsLogsTable({
           <button
             type="button"
             onClick={() => setActiveTab("invitees")}
-            className={`pb-3 font-semibold transition-colors cursor-pointer relative ${
+            className={`pb-3 font-semibold transition-colors cursor-pointer relative whitespace-nowrap shrink-0 ${
               activeTab === "invitees"
                 ? "text-gray-900 border-b-2 border-[#FF5B22]"
                 : "text-gray-500 hover:text-gray-800"
@@ -79,7 +91,7 @@ export default function ReportsLogsTable({
           <button
             type="button"
             onClick={() => setActiveTab("access")}
-            className={`pb-3 font-semibold transition-colors cursor-pointer relative ${
+            className={`pb-3 font-semibold transition-colors cursor-pointer relative whitespace-nowrap shrink-0 ${
               activeTab === "access"
                 ? "text-gray-900 border-b-2 border-[#FF5B22]"
                 : "text-gray-500 hover:text-gray-800"
@@ -91,7 +103,7 @@ export default function ReportsLogsTable({
           <button
             type="button"
             onClick={() => setActiveTab("sessions")}
-            className={`pb-3 font-semibold transition-colors cursor-pointer relative ${
+            className={`pb-3 font-semibold transition-colors cursor-pointer relative whitespace-nowrap shrink-0 ${
               activeTab === "sessions"
                 ? "text-gray-900 border-b-2 border-[#FF5B22]"
                 : "text-gray-500 hover:text-gray-800"
@@ -106,7 +118,7 @@ export default function ReportsLogsTable({
           <button
             type="button"
             onClick={onOpenCheckInModal}
-            className="mb-2 px-3 py-1.5 bg-[#FF5B22] hover:bg-[#E04B16] text-white font-bold text-xs rounded-md shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            className="mb-2 px-3 py-1.5 bg-[#FF5B22] hover:bg-[#E04B16] text-white font-bold text-xs rounded-md shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -203,12 +215,12 @@ export default function ReportsLogsTable({
 
                       const inviteeName = inviteeObj?.name || "Attendee";
                       const inviteeContact = inviteeObj?.email || inviteeObj?.mobile || "";
-                      const sessionName = sessionObj?.name || "Event Gate";
+                      const sessionName = sessionObj?.name || "Event entry";
 
                       const method = log.checkInMethod || "QR";
                       const checkInTime = log.checkInAt ? new Date(log.checkInAt).toLocaleString() : "—";
                       const staffName = checkedInByObj?.fullName || checkedInByObj?.email || String(log.checkedInBy || "Staff");
-                      const rsvp = inviteeObj?.rsvpStatus || "CONFIRMED";
+                      const rsvp = inviteeObj?.rsvpStatus || "—";
 
                       return (
                         <tr key={log._id} className="hover:bg-gray-50/80 transition-colors">
@@ -285,23 +297,34 @@ export default function ReportsLogsTable({
                   <th className="py-3 px-4 font-medium">RSVP Status</th>
                   <th className="py-3 px-4 font-medium">Check-in Status</th>
                   <th className="py-3 px-4 font-medium">Last Check-in Time</th>
-                  <th className="py-3 px-4 font-medium">Entry Session</th>
-                  <th className="py-3 px-4 font-medium">Lunch Session</th>
+                  {sessionColumns.map((col) => (
+                    <th key={col.id} className="py-3 px-4 font-medium text-center max-w-[140px] truncate" title={col.name}>
+                      {col.name}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 text-gray-800">
-                {inviteeLogs.map((log) => (
+                {loadingDetails && statusRow(6 + sessionColumns.length, "Loading invitees...")}
+                {!loadingDetails && inviteeLogs.length === 0 && statusRow(6 + sessionColumns.length, "No invitees found for this event.")}
+                {!loadingDetails && inviteeLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-gray-50/80 transition-colors">
-                    <td className="py-4 px-4 font-semibold text-gray-900">{log.name}</td>
+                    <td className="py-4 px-4 font-semibold text-gray-900 max-w-[220px] truncate" title={log.name}>{log.name}</td>
                     <td className="py-4 px-4 text-gray-600">{log.mobile}</td>
                     <td className="py-4 px-4">
-                      {log.invitationStatus === "Successfully Send" ? (
+                      {log.invitationStatus === "Sent" && (
                         <span className="bg-emerald-100/70 text-emerald-700 px-3 py-1 rounded-full text-[11px] font-semibold inline-block">
-                          Successfully Send
+                          Successfully Sent
                         </span>
-                      ) : (
+                      )}
+                      {log.invitationStatus === "Failed" && (
                         <span className="bg-orange-100/70 text-orange-700 px-3 py-1 rounded-full text-[11px] font-semibold inline-block">
                           Sending failed
+                        </span>
+                      )}
+                      {log.invitationStatus === "Pending" && (
+                        <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-[11px] font-semibold inline-block">
+                          Not sent yet
                         </span>
                       )}
                     </td>
@@ -340,28 +363,19 @@ export default function ReportsLogsTable({
                       )}
                     </td>
                     <td className="py-4 px-4 text-gray-600">{log.lastCheckInTime}</td>
-                    <td className="py-4 px-4 text-center">
-                      {log.entrySession ? (
-                        <svg className="w-4 h-4 text-emerald-600 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      ) : (
-                        <svg className="w-4 h-4 text-orange-500 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      )}
-                    </td>
-                    <td className="py-4 px-4 text-center">
-                      {log.lunchSession ? (
-                        <svg className="w-4 h-4 text-emerald-600 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      ) : (
-                        <svg className="w-4 h-4 text-orange-500 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      )}
-                    </td>
+                    {sessionColumns.map((col) => (
+                      <td key={col.id} className="py-4 px-4 text-center">
+                        {log.sessionCheckIns[col.id] ? (
+                          <svg className="w-4 h-4 text-emerald-600 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <svg className="w-4 h-4 text-orange-500 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        )}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
@@ -380,11 +394,13 @@ export default function ReportsLogsTable({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 text-gray-800">
-                {accessLogs.map((log) => (
+                {loadingDetails && statusRow(4, "Loading activity...")}
+                {!loadingDetails && accessLogs.length === 0 && statusRow(4, "No recorded activity for this event yet.")}
+                {!loadingDetails && accessLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-gray-50/80 transition-colors">
                     <td className="py-4 px-4 font-semibold text-gray-900">{log.userType}</td>
                     <td className="py-4 px-4 text-gray-600">{log.dateTime}</td>
-                    <td className="py-4 px-4 text-gray-700 font-medium">{log.action}</td>
+                    <td className="py-4 px-4 text-gray-700 font-medium max-w-[280px] truncate" title={log.action}>{log.action}</td>
                     <td className="py-4 px-4">
                       {log.status === "Successful" ? (
                         <span className="bg-emerald-100/70 text-emerald-700 px-3 py-1 rounded-full text-[11px] font-semibold inline-block">
@@ -419,10 +435,12 @@ export default function ReportsLogsTable({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 text-gray-800">
-                  {sessionsReport.map((sess) => (
+                  {loadingDetails && statusRow(7, "Loading sessions...")}
+                  {!loadingDetails && sessionsReport.length === 0 && statusRow(7, "No sessions for this event.")}
+                  {!loadingDetails && sessionsReport.map((sess) => (
                     <tr key={sess.id} className="hover:bg-gray-50/80 transition-colors">
                       <td className="py-4 px-4 font-semibold text-gray-600">{sess.id}</td>
-                      <td className="py-4 px-4 font-semibold text-gray-900">{sess.name}</td>
+                      <td className="py-4 px-4 font-semibold text-gray-900 max-w-[220px] truncate" title={sess.name}>{sess.name}</td>
                       <td className="py-4 px-4 text-gray-600">{sess.dateTime}</td>
                       <td className="py-4 px-4 font-medium text-gray-900">{sess.invitees}</td>
                       <td className="py-4 px-4 font-medium text-gray-900">{sess.attendees}</td>

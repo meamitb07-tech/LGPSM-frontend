@@ -172,8 +172,8 @@ export default function EventAssignUsersPage() {
           sessionIds: selectedSessionIds,
         });
 
-        if (!res.success && res.message) {
-          errors.push(res.message);
+        if (!res.success) {
+          errors.push(res.message || "Assignment failed.");
         }
       }
 
@@ -181,8 +181,11 @@ export default function EventAssignUsersPage() {
         setErrorFeedback(errors.join(". "));
       }
 
+      // Only confirm success when at least one assignment was actually saved
       setIsAssignModalOpen(false);
-      setIsAssignSuccessModalOpen(true);
+      if (errors.length < selectedUserIds.length) {
+        setIsAssignSuccessModalOpen(true);
+      }
       await fetchAssignmentsAndSessions();
       notifyDbUpdate();
     } catch (err: any) {

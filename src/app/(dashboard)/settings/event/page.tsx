@@ -46,11 +46,12 @@ export default function EventSettingsPage() {
 
       {/* Content */}
       <div className="p-6 max-w-4xl w-full mx-auto space-y-6 pb-24">
-        {savedMessage && (
-          <div className="p-4 bg-green-50 border border-green-200 text-green-700 rounded-md text-xs font-semibold transition-all">
-            Event Settings updated successfully!
-          </div>
-        )}
+        {/* No settings API exists yet, so nothing here is persisted */}
+        <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-md text-xs font-semibold">
+          {savedMessage
+            ? "Preferences applied for this session only - they are not stored on the server yet."
+            : "These preferences are not stored on the server yet and reset on reload."}
+        </div>
 
         <div className="bg-white rounded-md border border-gray-200/80 p-6 shadow-xs space-y-6">
           <h2 className="text-base font-bold text-gray-800">Setting options</h2>

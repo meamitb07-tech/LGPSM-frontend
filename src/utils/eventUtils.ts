@@ -15,14 +15,14 @@ export function parseEventDate(dateStr: any): Date | null {
   // Handle DD/MM/YY or DD/MM/YYYY with optional time like "23/09/26 03.00 PM" or "23/09/2026 03:00 PM"
   const match = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2})[.:](\d{2})(?:\s+(AM|PM))?)?/i);
   if (match) {
-    let [, dayStr, monthStr, yearStr, hourStr, minStr, ampm] = match;
-    let day = parseInt(dayStr, 10);
-    let month = parseInt(monthStr, 10) - 1;
+    const [, dayStr, monthStr, yearStr, hourStr, minStr, ampm] = match;
+    const day = parseInt(dayStr, 10);
+    const month = parseInt(monthStr, 10) - 1;
     let year = parseInt(yearStr, 10);
     if (year < 100) year += 2000;
 
     let hour = hourStr ? parseInt(hourStr, 10) : 0;
-    let min = minStr ? parseInt(minStr, 10) : 0;
+    const min = minStr ? parseInt(minStr, 10) : 0;
     if (ampm) {
       const upper = ampm.toUpperCase();
       if (upper === "PM" && hour < 12) hour += 12;

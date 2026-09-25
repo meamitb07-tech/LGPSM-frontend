@@ -99,22 +99,37 @@ function formatEventPayload(payload: any) {
   }
   const endISO = endDateObj.toISOString();
 
-  const address = typeof payload.location === "string"
+  const rawAddress = typeof payload.location === "string"
     ? payload.location
-    : (payload.location?.address || payload.venue || "Grand Ballroom, Tech City");
+    : (payload.location?.address || payload.venue || "");
+  const address = typeof rawAddress === "string" ? rawAddress.trim() : "";
 
   return {
     title,
-    description: payload.description || "Event Description",
+    description: payload.description || title,
     format: "PHYSICAL",
     schedule: {
       start: startISO,
       end: endISO,
     },
-    location: {
-      address,
-    },
+    // Only send a venue the user actually entered
+    ...(address ? { location: { address } } : {}),
   };
+}
+
+// Strict parse for user-entered dates: ISO strings or the picker format "DD/MM/YY hh.mm AM".
+// Returns null instead of silently substituting "now".
+function parseUserDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (/^\d{1,2}\/\d{1,2}\/\d{2,4}/.test(trimmed)) {
+    const parsed = parseCustomDateTime(trimmed);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  }
+  const direct = new Date(trimmed);
+  return isNaN(direct.getTime()) ? null : direct;
 }
 
 function formatUpdatePayload(payload: any) {
@@ -122,32 +137,23 @@ function formatUpdatePayload(payload: any) {
   if (payload.title || payload.eventName) body.title = payload.title || payload.eventName;
   if (payload.description) body.description = payload.description;
 
-  if (payload.startDate || payload.endDate || payload.schedule) {
-    const startVal = payload.startDate || payload.schedule?.start || new Date().toISOString();
-    const endVal = payload.endDate || payload.schedule?.end || new Date(Date.now() + 8 * 3600 * 1000).toISOString();
-
-    let startISO = new Date(startVal).toISOString();
-    let endISO = new Date(endVal).toISOString();
-    if (isNaN(new Date(startISO).getTime())) startISO = new Date().toISOString();
-    if (isNaN(new Date(endISO).getTime())) endISO = new Date(Date.now() + 8 * 3600 * 1000).toISOString();
-
-    if (new Date(endISO) <= new Date(startISO)) {
-      endISO = new Date(new Date(startISO).getTime() + 8 * 3600 * 1000).toISOString();
-    }
-
+  const start = parseUserDate(payload.startDate || payload.schedule?.start);
+  const end = parseUserDate(payload.endDate || payload.schedule?.end);
+  if (start && end && end > start) {
     body.schedule = {
-      start: startISO,
-      end: endISO,
+      start: start.toISOString(),
+      end: end.toISOString(),
     };
   }
 
-  if (payload.location || payload.venue) {
-    const address = typeof payload.location === "string"
-      ? payload.location
-      : (payload.location?.address || payload.venue);
-    if (address) {
-      body.location = { address };
-    }
+  // An edited venue (string) takes precedence over the stored location object
+  const address = typeof payload.venue === "string"
+    ? payload.venue.trim()
+    : typeof payload.location === "string"
+      ? payload.location.trim()
+      : payload.location?.address;
+  if (address) {
+    body.location = { address };
   }
 
   if (payload.status) {
@@ -177,11 +183,13 @@ export const eventService = {
    * Get all events for the authenticated organizer
    * GET /api/v1/events
    */
-  async getEvents(params?: { page?: number; limit?: number }): Promise<ApiResponse<EventsListData>> {
-    const queryString = params
+  async getEvents(params?: { page?: number; limit?: number; organizerId?: string }): Promise<ApiResponse<EventsListData>> {
+    // Backend defaults to 10 per page; callers here render full lists/dropdowns
+    const effectiveParams = { limit: 100, ...(params || {}) };
+    const queryString = effectiveParams
       ? `?${new URLSearchParams(
           Object.fromEntries(
-            Object.entries(params)
+            Object.entries(effectiveParams)
               .filter(([, v]) => v !== undefined)
               .map(([k, v]) => [k, String(v)])
           )

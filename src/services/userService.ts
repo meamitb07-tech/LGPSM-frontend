@@ -1,11 +1,11 @@
 import { apiClient, ApiResponse } from "./apiClient";
 import { UserData, tokenStorage } from "./tokenStorage";
 
+// Fields accepted by PATCH /api/users/profile
 export interface UpdateProfilePayload {
   fullName?: string;
-  email?: string;
   phone?: string;
-  avatarUrl?: string | null;
+  profile?: Record<string, unknown>;
 }
 
 export const userService = {
@@ -34,6 +34,21 @@ export const userService = {
   },
 
   /**
+   * Change own password (verifies the current password)
+   * PATCH /api/users/me/password
+   */
+  async changePassword(currentPassword: string, newPassword: string): Promise<ApiResponse<{ updated: boolean }>> {
+    return apiClient<{ updated: boolean }>(
+      "/api/users/me/password",
+      {
+        method: "PATCH",
+        body: JSON.stringify({ currentPassword, newPassword }),
+      },
+      true
+    );
+  },
+
+  /**
    * Create sub-user (ADMIN / ORGANIZER requirement)
    * POST /api/users/
    */
@@ -43,6 +58,7 @@ export const userService = {
     password?: string;
     role?: "ADMIN" | "ORGANIZER" | "SYSTEM_USER";
     phone?: string;
+    profile?: { organizationName?: string };
   }): Promise<ApiResponse<UserData>> {
     return apiClient<UserData>(
       "/api/users/",

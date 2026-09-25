@@ -41,14 +41,14 @@ export function parseCustomDateTime(str?: any): Date {
   // Try parsing "DD/MM/YY HH.MM AM" or "DD/MM/YYYY HH:MM PM" format
   const match = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2})[:.](\d{1,2})(?:[:.](\d{1,2}))?\s*(AM|PM)?)?/i);
   if (match) {
-    let day = parseInt(match[1], 10);
-    let month = parseInt(match[2], 10) - 1; // 0-indexed
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10) - 1; // 0-indexed
     let year = parseInt(match[3], 10);
     if (year < 100) year += 2000;
 
     let hours = match[4] ? parseInt(match[4], 10) : 0;
-    let minutes = match[5] ? parseInt(match[5], 10) : 0;
-    let seconds = match[6] ? parseInt(match[6], 10) : 0;
+    const minutes = match[5] ? parseInt(match[5], 10) : 0;
+    const seconds = match[6] ? parseInt(match[6], 10) : 0;
     const ampm = match[7] ? match[7].toUpperCase() : null;
 
     if (ampm === "PM" && hours < 12) hours += 12;
@@ -114,7 +114,8 @@ export const sessionService = {
    * GET /api/v1/events/:eventId/sessions
    */
   async getSessions(eventId: string): Promise<ApiResponse<SessionData[]>> {
-    return apiClient<SessionData[]>(`/api/v1/events/${eventId}/sessions`, {
+    // Backend pages at 10 by default; callers render the full list
+    return apiClient<SessionData[]>(`/api/v1/events/${eventId}/sessions?limit=100`, {
       method: "GET",
     }, true);
   },

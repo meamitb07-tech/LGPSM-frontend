@@ -58,7 +58,7 @@ export default function AddEventPage() {
     category: "Corporate",
     subcategory: "",
     contactNumber: "",
-    venue: "Grand Ballroom, Tech City",
+    venue: "",
   });
 
   // Modal Control States
@@ -125,8 +125,12 @@ export default function AddEventPage() {
   };
 
   const handleFinishEvent = async (sessionsList?: any[]) => {
-    const finalTitle = eventDetails.title.trim() || "New Tech Event 2026";
-    const finalVenue = eventDetails.venue.trim() || "Grand Ballroom, Tech City";
+    const finalTitle = eventDetails.title.trim();
+    if (!finalTitle) {
+      showAlert("Please enter an event title before creating the event.", "error");
+      setCurrentStep(1);
+      return;
+    }
 
     try {
       const res = await eventService.createEvent({
@@ -135,55 +139,61 @@ export default function AddEventPage() {
         startDate: startDate,
         endDate: endDate,
         rsvpDeadline: rsvpDate,
-        location: finalVenue,
+        location: eventDetails.venue.trim(),
         isPublic: true,
       });
 
-      if (res.success && res.data) {
-        const createdId = (res.data as any).eventId || res.data.id || (res.data as any)._id;
-        if (createdId) {
-          // Persist all real sessions created during Add Event to backend
-          if (Array.isArray(sessionsList) && sessionsList.length > 0) {
-            for (const sess of sessionsList) {
-              try {
-                await sessionService.createSession(createdId, {
-                  name: sess.name,
-                  startTime: sess.startTime || startDate,
-                  endTime: sess.endTime || endDate,
-                  accessControl: sess.accessControl,
-                });
-              } catch (sessErr) {
-                console.warn("Session creation info:", sessErr);
-              }
+      const createdId = res.success && res.data
+        ? (res.data as any).eventId || res.data.id || (res.data as any)._id
+        : undefined;
 
-              // Persist invitees to backend if uploaded or listed
-              if (sess.uploadedFile) {
-                try {
-                  await inviteeService.importExcel(createdId, sess.uploadedFile);
-                } catch (impErr) {
-                  console.warn("Invitee excel import info:", impErr);
-                }
-              } else if (Array.isArray(sess.inviteesList) && sess.inviteesList.length > 0) {
-                for (const inv of sess.inviteesList) {
-                  try {
-                    await inviteeService.createInvitee(createdId, {
-                      name: inv.name,
-                      email: inv.email,
-                      mobile: inv.phone || inv.mobile,
-                    });
-                  } catch (invErr) {
-                    console.warn("Invitee creation info:", invErr);
-                  }
-                }
-              }
-            }
+      if (!createdId) {
+        showAlert(res.message || "Failed to create event.", "error");
+        return;
+      }
+
+      // Persist sessions and invitees; collect every failure so the user is told what did not save
+      const problems: string[] = [];
+      if (Array.isArray(sessionsList) && sessionsList.length > 0) {
+        for (const sess of sessionsList) {
+          const sessRes = await sessionService.createSession(createdId, {
+            name: sess.name,
+            startTime: sess.startTime || startDate,
+            endTime: sess.endTime || endDate,
+            accessControl: sess.accessControl,
+          });
+          if (!sessRes.success) {
+            problems.push(`Session "${sess.name}": ${sessRes.message || "could not be created"}`);
           }
 
-          router.push(`/events/${createdId}`);
-          return;
+          if (sess.uploadedFile) {
+            const impRes = await inviteeService.importExcel(createdId, sess.uploadedFile);
+            if (!impRes.success) {
+              problems.push(`Invitee file "${sess.uploadedFileName || "upload"}": ${impRes.message || "import failed"}`);
+            } else if (impRes.data && impRes.data.rejected > 0) {
+              problems.push(`Invitee file "${sess.uploadedFileName || "upload"}": ${impRes.data.rejected} row(s) rejected`);
+            }
+          } else if (Array.isArray(sess.inviteesList) && sess.inviteesList.length > 0) {
+            let failedInvitees = 0;
+            for (const inv of sess.inviteesList) {
+              const invRes = await inviteeService.createInvitee(createdId, {
+                name: inv.name,
+                email: inv.email || undefined,
+                mobile: inv.phone || inv.mobile || undefined,
+              });
+              if (!invRes.success) failedInvitees++;
+            }
+            if (failedInvitees > 0) {
+              problems.push(`${failedInvitees} invitee(s) for "${sess.name}" could not be added`);
+            }
+          }
         }
       }
-      showAlert(res.message || "Failed to create event.", "error");
+
+      if (problems.length > 0) {
+        showAlert(`Event created, but some items were not saved: ${problems.join("; ")}`, "warning");
+      }
+      router.push(`/events/${createdId}`);
     } catch (e: any) {
       showAlert(e.message || "An error occurred while creating event.", "error");
     }

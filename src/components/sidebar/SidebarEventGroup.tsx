@@ -25,7 +25,7 @@ export default function SidebarEventGroup({
   // Base navigation links
   const allNavLinks = [
     { label: "Events", href: "/events", activeKeys: ["events-list", "event-management"], roles: ["ADMIN", "ORGANIZER"] },
-    { label: "Add Invitees", href: "/events/1/invitees?from=sidebar", activeKeys: ["add-invitees", "invitees-management"], roles: ["ADMIN", "ORGANIZER"] },
+    { label: "Add Invitees", href: "/events/select/invitees?from=sidebar", activeKeys: ["add-invitees", "invitees-management"], roles: ["ADMIN", "ORGANIZER"] },
     { label: "Assign System Users", href: "/user-management/assign", activeKeys: ["assign-system-users"], roles: ["ADMIN", "ORGANIZER"] },
     { label: "Add User", href: "/user-management/add", activeKeys: ["add-user"], roles: ["ADMIN"] },
     { label: "All Users", href: "/user-management", activeKeys: ["all-users", "user-management"], roles: ["ADMIN"] },

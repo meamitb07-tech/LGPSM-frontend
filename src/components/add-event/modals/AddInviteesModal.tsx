@@ -62,7 +62,7 @@ export default function AddInviteesModal({
   // Load dynamic events list
   useEffect(() => {
     async function loadEvents() {
-      let combined: { id: string; title: string }[] = [];
+      const combined: { id: string; title: string }[] = [];
       try {
         const res = await eventService.getEvents();
         const rawList = Array.isArray(res?.data) ? res.data : ((res?.data as any)?.events || []);
@@ -75,19 +75,6 @@ export default function AddInviteesModal({
       } catch (err) {
         console.error("Failed to load events in modal:", err);
       }
-
-      // Add local cached events
-      try {
-        const saved = localStorage.getItem("app_local_events");
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          parsed.forEach((ev: any) => {
-            if (ev.id && !combined.some((item) => item.id === ev.id)) {
-              combined.push({ id: ev.id, title: ev.eventName || ev.title || "Untitled Event" });
-            }
-          });
-        }
-      } catch {}
 
       if (combined.length === 0 && initialEventId) {
         combined.push({ id: initialEventId, title: "Current Event" });
@@ -195,7 +182,11 @@ export default function AddInviteesModal({
       return;
     }
 
-    const targetEventId = selectedEventId || initialEventId || "1";
+    const targetEventId = selectedEventId || initialEventId || "";
+    if (!targetEventId || targetEventId === "1" || targetEventId === "select") {
+      showAlert("Please select an event first.", "warning");
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -252,7 +243,11 @@ export default function AddInviteesModal({
       return;
     }
 
-    const targetEventId = selectedEventId || initialEventId || "1";
+    const targetEventId = selectedEventId || initialEventId || "";
+    if (!targetEventId || targetEventId === "1" || targetEventId === "select") {
+      showAlert("Please select an event first.", "warning");
+      return;
+    }
     setIsSubmitting(true);
 
     const compName = manualForm.companyName.trim();

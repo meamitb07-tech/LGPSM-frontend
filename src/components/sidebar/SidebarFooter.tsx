@@ -1,9 +1,10 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import { notificationService } from "@/services/notificationService";
 
 interface SidebarFooterProps {
   activeItem?: string;
@@ -11,7 +12,23 @@ interface SidebarFooterProps {
 
 export default function SidebarFooter({ activeItem }: SidebarFooterProps) {
   const router = useRouter();
-  const { logout } = useAuth();
+  const pathname = usePathname();
+  const { logout, isAuthenticated } = useAuth();
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+
+  // Unread count comes from the backend (meta.unreadCount); refreshed on navigation
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let cancelled = false;
+    notificationService.getUserNotifications(true, 1, 1).then((res) => {
+      if (cancelled) return;
+      const count = (res as { meta?: { unreadCount?: number } }).meta?.unreadCount;
+      setUnreadCount(res.success && typeof count === "number" ? count : 0);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, pathname]);
 
   const handleLogout = async () => {
     await logout();
@@ -47,6 +64,14 @@ export default function SidebarFooter({ activeItem }: SidebarFooterProps) {
           />
         </svg>
         <span>Notification</span>
+        {unreadCount > 0 && (
+          <span
+            className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-[#FF5B22] text-white text-[10px] font-bold flex items-center justify-center"
+            aria-label={`${unreadCount} unread notifications`}
+          >
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </span>
+        )}
       </Link>
 
       <button

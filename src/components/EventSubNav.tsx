@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { sessionService } from "@/services/sessionService";
 import { inviteeService } from "@/services/inviteeService";
@@ -31,7 +31,12 @@ export default function EventSubNav({
   const [inviteesCount, setInviteesCount] = useState<number>(propInviteesCount ?? 0);
   const [assignmentsCount, setAssignmentsCount] = useState<number>(propAssignmentsCount ?? 0);
 
+  // Fallback counts live in a ref so parent re-renders do not trigger another round of requests
+  const fallbackCounts = useRef({ propSessionsCount, propInviteesCount, propAssignmentsCount });
+  fallbackCounts.current = { propSessionsCount, propInviteesCount, propAssignmentsCount };
+
   const fetchUnifiedCounts = useCallback(async () => {
+    const { propSessionsCount, propInviteesCount, propAssignmentsCount } = fallbackCounts.current;
     if (!eventId || eventId === "1" || eventId === "select") return;
 
     try {
@@ -64,7 +69,7 @@ export default function EventSubNav({
     } catch (err) {
       console.error("Error loading subnav counts from database:", err);
     }
-  }, [eventId, propSessionsCount, propInviteesCount, propAssignmentsCount]);
+  }, [eventId]);
 
   useEffect(() => {
     fetchUnifiedCounts();

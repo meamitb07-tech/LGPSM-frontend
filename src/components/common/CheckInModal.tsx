@@ -372,11 +372,11 @@ export default function CheckInModal({
                 </div>
                 <div>
                   <span className="text-gray-500 block">RSVP Status:</span>
-                  <span className="font-semibold text-gray-800">{successData.invitee?.rsvpStatus || "CONFIRMED"}</span>
+                  <span className="font-semibold text-gray-800">{successData.invitee?.rsvpStatus || "—"}</span>
                 </div>
                 <div>
                   <span className="text-gray-500 block">Session:</span>
-                  <span className="font-semibold text-gray-800">{successData.session?.name || "Event Gate"}</span>
+                  <span className="font-semibold text-gray-800">{successData.session?.name || "Event entry"}</span>
                 </div>
                 <div>
                   <span className="text-gray-500 block">Check-In Time:</span>

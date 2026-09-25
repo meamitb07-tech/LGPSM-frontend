@@ -50,6 +50,13 @@ export default function PriceHistoryTable({ history }: PriceHistoryTableProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 text-gray-700">
+            {history.length === 0 && (
+              <tr>
+                <td colSpan={5} className="py-10 text-center text-gray-400 font-medium">
+                  No rate changes recorded in this session.
+                </td>
+              </tr>
+            )}
             {history.map((item) => {
               const isIncrease = item.changeType === "Increase";
               const isActive = item.status === "Active";

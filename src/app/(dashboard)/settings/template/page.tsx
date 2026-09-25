@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useAuth } from "@/context/AuthContext";
 import UserNavDropdown from "@/components/common/UserNavDropdown";
 import AddNewTemplateCard from "@/components/settings/AddNewTemplateCard";
 import TemplateFilterGrid from "@/components/settings/TemplateFilterGrid";
@@ -11,62 +10,62 @@ import EditTemplateModal from "@/components/settings/modals/EditTemplateModal";
 import { categoryService, Category } from "@/services/categoryService";
 import { templateService, Template } from "@/services/templateService";
 import {
-  initialCategories,
-  initialSubcategories,
-  initialTemplates,
-} from "@/data/settingsData";
-import {
   TemplateCategory,
   TemplateSubcategory,
   TemplateItem,
 } from "@/types/settings";
 
+// Shown until a real preview image is uploaded for a template
+const TEMPLATE_PLACEHOLDER_IMAGE = "/images/branding/Invitation_Card_Sample.png";
+
 export default function TemplateSettingsPage() {
-  const { user } = useAuth();
-  const [categories, setCategories] = useState<TemplateCategory[]>(initialCategories);
-  const [subcategories, setSubcategories] = useState<TemplateSubcategory[]>(
-    initialSubcategories
-  );
-  const [templates, setTemplates] = useState<TemplateItem[]>(initialTemplates);
+  const [categories, setCategories] = useState<TemplateCategory[]>([]);
+  const [subcategories, setSubcategories] = useState<TemplateSubcategory[]>([]);
+  const [rawCategories, setRawCategories] = useState<Category[]>([]);
+  const [templates, setTemplates] = useState<TemplateItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string } | null>(null);
 
   const [isAddCatOpen, setIsAddCatOpen] = useState(false);
   const [isAddSubOpen, setIsAddSubOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<TemplateItem | null>(null);
 
   const loadData = useCallback(async () => {
-    try {
-      const [catRes, tmplRes] = await Promise.allSettled([
-        categoryService.getCategories(),
-        templateService.getTemplates(),
-      ]);
+    const [catRes, tmplRes] = await Promise.all([
+      categoryService.getCategories(),
+      templateService.getTemplates(),
+    ]);
 
-      if (catRes.status === "fulfilled" && catRes.value?.success && Array.isArray(catRes.value.data)) {
-        const backendCats: TemplateCategory[] = catRes.value.data.map((c: Category) => ({
-          id: c._id || c.id || c.name.toLowerCase().replace(/\s+/g, "-"),
-          name: c.name,
-        }));
-        if (backendCats.length > 0) {
-          setCategories(backendCats);
-        }
-      }
-
-      if (tmplRes.status === "fulfilled" && tmplRes.value?.success && Array.isArray(tmplRes.value.data)) {
-        const backendTmpls: TemplateItem[] = tmplRes.value.data.map((t: Template) => ({
-          id: t._id || t.id || Date.now().toString(),
-          name: t.name,
-          categoryId: t.categoryId || "personal",
-          subcategoryId: t.subcategoryId || "birthday",
-          imageUrl: t.previewImageKey || "/images/auth/login_side_img.png",
-          status: t.isPublished ? "Published" : "Saved on Draft",
-          createdAt: t.createdAt ? new Date(t.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
-        }));
-        if (backendTmpls.length > 0) {
-          setTemplates(backendTmpls);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to load settings templates/categories:", err);
+    if (catRes.success && Array.isArray(catRes.data)) {
+      setRawCategories(catRes.data);
+      setCategories(catRes.data.map((c: Category) => ({ id: c._id || c.id || "", name: c.name })));
+      setSubcategories(
+        catRes.data.flatMap((c: Category) =>
+          (c.subcategories || [])
+            .filter((sub) => sub._id)
+            .map((sub) => ({ id: sub._id as string, categoryId: c._id, name: sub.name }))
+        )
+      );
+    } else {
+      setFeedback({ type: "error", message: catRes.message || "Failed to load categories." });
     }
+
+    if (tmplRes.success && Array.isArray(tmplRes.data)) {
+      setTemplates(
+        tmplRes.data.map((t: Template) => ({
+          id: t._id || t.id || "",
+          name: t.name,
+          categoryId: typeof t.categoryId === "object" && t.categoryId ? t.categoryId._id : t.categoryId || "",
+          subcategoryId: t.subcategoryId || "",
+          imageUrl: t.previewImageKey || TEMPLATE_PLACEHOLDER_IMAGE,
+          status: t.isActive === false ? "Saved on Draft" : "Published",
+          createdAt: t.createdAt ? new Date(t.createdAt).toISOString().split("T")[0] : "",
+        }))
+      );
+    } else {
+      setFeedback({ type: "error", message: tmplRes.message || "Failed to load templates." });
+    }
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -74,24 +73,30 @@ export default function TemplateSettingsPage() {
   }, [loadData]);
 
   const handleAddCategory = async (name: string) => {
-    const newCat: TemplateCategory = {
-      id: name.toLowerCase().replace(/\s+/g, "-"),
-      name,
-    };
-    setCategories((prev) => [...prev, newCat]);
-    try {
-      await categoryService.createCategory({ name });
-      loadData();
-    } catch (e) {}
+    const res = await categoryService.createCategory({ name });
+    if (!res.success) {
+      setFeedback({ type: "error", message: res.message || "Failed to add category." });
+      return;
+    }
+    setFeedback({ type: "success", message: `Category "${name}" added.` });
+    await loadData();
   };
 
-  const handleAddSubcategory = (categoryId: string, name: string) => {
-    const newSub: TemplateSubcategory = {
-      id: name.toLowerCase().replace(/\s+/g, "-"),
-      categoryId,
-      name,
-    };
-    setSubcategories((prev) => [...prev, newSub]);
+  const handleAddSubcategory = async (categoryId: string, name: string) => {
+    const parent = rawCategories.find((c) => c._id === categoryId);
+    if (!parent) {
+      setFeedback({ type: "error", message: "Select a valid category first." });
+      return;
+    }
+    const res = await categoryService.updateCategory(categoryId, {
+      subcategories: [...(parent.subcategories || []).map((sub) => ({ name: sub.name, isActive: sub.isActive })), { name }],
+    });
+    if (!res.success) {
+      setFeedback({ type: "error", message: res.message || "Failed to add subcategory." });
+      return;
+    }
+    setFeedback({ type: "success", message: `Subcategory "${name}" added.` });
+    await loadData();
   };
 
   const handleAddTemplate = async (data: {
@@ -100,50 +105,43 @@ export default function TemplateSettingsPage() {
     subcategoryId: string;
     isPublished: boolean;
   }) => {
-    const newTpl: TemplateItem = {
-      id: Date.now().toString(),
+    const res = await templateService.createTemplate({
       name: data.name,
-      categoryId: data.categoryId,
-      subcategoryId: data.subcategoryId,
-      imageUrl: "/images/auth/login_side_img.png",
-      status: data.isPublished ? "Published" : "Saved on Draft",
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-    setTemplates((prev) => [newTpl, ...prev]);
-
-    try {
-      await templateService.createTemplate({
-        name: data.name,
-        categoryId: data.categoryId,
-        subcategoryId: data.subcategoryId,
-        isPublished: data.isPublished,
-      });
-      loadData();
-    } catch (err) {
-      console.error("Failed to create template on backend:", err);
+      categoryId: data.categoryId || undefined,
+      subcategoryId: data.subcategoryId || undefined,
+      isPublished: data.isPublished,
+    });
+    if (!res.success) {
+      setFeedback({ type: "error", message: res.message || "Failed to create template." });
+      return;
     }
+    setFeedback({ type: "success", message: `Template "${data.name}" created.` });
+    await loadData();
   };
 
   const handleSaveEditedTemplate = async (updated: TemplateItem) => {
-    setTemplates((prev) =>
-      prev.map((t) => (t.id === updated.id ? updated : t))
-    );
-    try {
-      await templateService.updateTemplate(updated.id, {
-        name: updated.name,
-        categoryId: updated.categoryId,
-        subcategoryId: updated.subcategoryId,
-        isPublished: updated.status === "Published",
-      });
-      loadData();
-    } catch (e) {}
+    const res = await templateService.updateTemplate(updated.id, {
+      name: updated.name,
+      categoryId: updated.categoryId || undefined,
+      subcategoryId: updated.subcategoryId || undefined,
+      isPublished: updated.status === "Published",
+    });
+    if (!res.success) {
+      setFeedback({ type: "error", message: res.message || "Failed to update template." });
+      return;
+    }
+    setFeedback({ type: "success", message: "Template updated." });
+    await loadData();
   };
 
   const handleDeleteTemplate = async (id: string) => {
-    setTemplates((prev) => prev.filter((t) => t.id !== id));
-    try {
-      await templateService.deleteTemplate(id);
-    } catch (e) {}
+    const res = await templateService.deleteTemplate(id);
+    if (!res.success) {
+      setFeedback({ type: "error", message: res.message || "Failed to delete template." });
+      return;
+    }
+    setFeedback({ type: "success", message: "Template deleted." });
+    await loadData();
   };
 
   return (
@@ -161,6 +159,19 @@ export default function TemplateSettingsPage() {
 
       {/* Page Content */}
       <div className="p-6 max-w-7xl w-full mx-auto space-y-6 pb-24">
+        {feedback && (
+          <div
+            className={`p-3 rounded-md text-xs font-medium flex items-center justify-between gap-3 border ${
+              feedback.type === "error" ? "bg-rose-50 border-rose-200 text-rose-700" : "bg-emerald-50 border-emerald-200 text-emerald-700"
+            }`}
+          >
+            <span className="break-words min-w-0">{feedback.message}</span>
+            <button type="button" onClick={() => setFeedback(null)} className="font-semibold shrink-0 cursor-pointer">
+              Dismiss
+            </button>
+          </div>
+        )}
+        {loading && <p className="text-xs text-gray-500 font-medium">Loading templates...</p>}
         <AddNewTemplateCard
           categories={categories}
           subcategories={subcategories}

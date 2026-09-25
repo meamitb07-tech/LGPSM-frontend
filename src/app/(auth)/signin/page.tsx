@@ -90,12 +90,7 @@ export default function SigninPage() {
         if (typeof window !== "undefined") {
           sessionStorage.setItem("show_dashboard_popup", "true");
         }
-        const role = res.data?.user?.role;
-        if (role === "SYSTEM_USER") {
-          router.push("/events");
-        } else {
-          router.push("/dashboard");
-        }
+        router.push("/dashboard");
       } else {
         setErrorMessage(res.message || "Invalid credentials. Please check your email and password.");
       }

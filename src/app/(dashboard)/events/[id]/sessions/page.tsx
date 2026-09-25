@@ -4,6 +4,8 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { reportService } from "@/services/reportService";
+import { inviteeService } from "@/services/inviteeService";
 import { sessionService } from "@/services/sessionService";
 import DateTimePickerModal from "@/components/add-event/modals/DateTimePickerModal";
 import EventSubNav from "@/components/EventSubNav";
@@ -27,11 +29,12 @@ function getFormattedCurrentDateTime(offsetHours: number = 0): string {
 
 export default function EventSessionsPage() {
   const params = useParams();
-  const eventId = (params?.id as string) || "1";
+  const eventId = (params?.id as string) || "";
   const { user } = useAuth();
 
   const [sessions, setSessions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
@@ -42,8 +45,16 @@ export default function EventSessionsPage() {
   const fetchSessions = async () => {
     if (!eventId) return;
     setIsLoading(true);
+    setLoadError(null);
     try {
-      const res = await sessionService.getSessions(eventId);
+      const [res, reportRes] = await Promise.all([
+        sessionService.getSessions(eventId),
+        reportService.getEventReport(eventId),
+      ]);
+      // Invited counts per session come from the event report (sessionAccess-aware)
+      const invitedBySession = new Map<string, number>(
+        (reportRes.success && reportRes.data ? reportRes.data.sessionReports : []).map((r) => [String(r.sessionId), r.invitedCount ?? 0])
+      );
       if (res?.success && Array.isArray(res.data)) {
         const mapped = res.data.map((s: any, idx: number) => {
           const id = s._id || s.id;
@@ -58,17 +69,19 @@ export default function EventSessionsPage() {
             endTime: endVal ? new Date(endVal).toLocaleString() : "",
             accessControl: s.accessControl || "NO_RESTRICTION",
             speaker: s.speaker || "-",
-            invitesCount: s.invitesCount ?? s.totalInvitees ?? s.maxAttendees ?? 0,
+            invitesCount: invitedBySession.get(String(id)) ?? 0,
             validateAgainstOtherSessions: s.validateAgainstOtherSessions || false,
           };
         });
         setSessions(mapped);
       } else {
         setSessions([]);
+        setLoadError(res?.message || "Failed to load sessions.");
       }
     } catch (error) {
       console.error("Failed to fetch sessions from backend API:", error);
       setSessions([]);
+      setLoadError("Could not reach the server. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -86,6 +99,7 @@ export default function EventSessionsPage() {
   const [keepSameInvitees, setKeepSameInvitees] = useState(false);
   const [selectedSameSession, setSelectedSameSession] = useState("");
   const [uploadedFileName, setUploadedFileName] = useState("");
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
 
   const handleOpenDatePicker = (field: "start" | "end") => {
     setActiveDateField(field);
@@ -103,6 +117,7 @@ export default function EventSessionsPage() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setUploadedFileName(e.target.files[0].name);
+      setUploadedFile(e.target.files[0]);
     }
   };
 
@@ -119,8 +134,18 @@ export default function EventSessionsPage() {
       });
 
       if (res.success) {
+        // Invitees from the uploaded sheet are imported into this event through the backend
+        if (uploadedFile) {
+          const importRes = await inviteeService.importExcel(eventId, uploadedFile);
+          if (!importRes.success) {
+            alert(`Session created, but the invitee file could not be imported: ${importRes.message || "unknown error"}`);
+          } else if (importRes.data && importRes.data.rejected > 0) {
+            alert(`Session created. ${importRes.data.imported} invitee(s) imported, ${importRes.data.rejected} row(s) rejected.`);
+          }
+        }
         setSessionName("");
         setUploadedFileName("");
+        setUploadedFile(null);
         setIsAddModalOpen(false);
         await fetchSessions();
       } else {
@@ -234,6 +259,12 @@ export default function EventSessionsPage() {
                   <tr>
                     <td colSpan={7} className="py-8 text-center text-gray-500">
                       Loading...
+                    </td>
+                  </tr>
+                ) : loadError ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-rose-600 break-words">
+                      {loadError}
                     </td>
                   </tr>
                 ) : filteredSessions.length === 0 ? (
@@ -424,7 +455,7 @@ export default function EventSessionsPage() {
                       />
                     </label>
                     <span className="text-xs text-gray-500 truncate">
-                      {uploadedFileName || "No file choosn"}
+                      {uploadedFileName || "No file chosen"}
                     </span>
                   </div>
                 </div>

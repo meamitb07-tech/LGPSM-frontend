@@ -15,7 +15,8 @@ export interface TicketTier {
 
 export const ticketTierService = {
   async getTicketTiers(eventId: string, activeOnly: boolean = true): Promise<ApiResponse<TicketTier[]>> {
-    return apiClient<TicketTier[]>(`/api/v1/events/${eventId}/tickets?activeOnly=${activeOnly}`, { method: "GET" }, false);
+    // Event-scoped routes sit behind authentication on the backend, so send the token
+    return apiClient<TicketTier[]>(`/api/v1/events/${eventId}/tickets?activeOnly=${activeOnly}`, { method: "GET" }, true);
   },
 
   async createTicketTier(

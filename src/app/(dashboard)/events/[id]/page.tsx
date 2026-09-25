@@ -164,10 +164,11 @@ function GuestLogsDonutChart({ invitees }: { invitees: any[] }) {
 
 export default function EventDetailsDashboardPage() {
   const params = useParams();
-  const eventId = (params?.id as string) || "1";
+  const eventId = (params?.id as string) || "";
   const { user } = useAuth();
 
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [eventData, setEventData] = useState<any>(null);
   const [sessions, setSessions] = useState<any[]>([]);
   const [invitees, setInvitees] = useState<any[]>([]);
@@ -182,6 +183,7 @@ export default function EventDetailsDashboardPage() {
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
+    setLoadError(null);
     let eventObj: any = null;
     let sessionsList: any[] = [];
     let inviteesList: any[] = [];
@@ -195,6 +197,9 @@ export default function EventDetailsDashboardPage() {
         assignmentService.getEventAssignments(eventId),
       ]);
 
+      if (!eventRes?.success) {
+        setLoadError(eventRes?.message || "Event not found or you do not have access to it.");
+      }
       if (eventRes?.success && eventRes?.data) {
         const raw = (eventRes.data as any).event || eventRes.data;
         if (raw && (raw.title || raw.name || raw.eventName)) {
@@ -205,13 +210,15 @@ export default function EventDetailsDashboardPage() {
           eventObj = {
             ...raw,
             title: raw.title || raw.name || raw.eventName,
-            category: raw.category || raw.categoryId?.name || "Corporate",
-            organizer: raw.organizerId?.fullName || raw.organizer || user?.fullName || "Organizer",
-            organizerId: { fullName: raw.organizerId?.fullName || raw.organizer || user?.fullName || "Organizer" },
+            category: raw.category || raw.categoryId?.name || null,
+            organizer: raw.organizerId?.fullName || raw.organizer || user?.fullName || "",
+            organizerId: { fullName: raw.organizerId?.fullName || raw.organizer || user?.fullName || "" },
+            startRaw: startVal || null,
+            endRaw: endVal || null,
             startDate: startVal ? new Date(startVal).toLocaleString() : "TBD",
             endDate: endVal ? new Date(endVal).toLocaleString() : "TBD",
             status: raw.status || "Upcoming",
-            venue: locVal || "Grand Ballroom, Tech City",
+            venue: locVal || "",
             operationalDataCleared: raw.operationalDataCleared ?? false,
           };
         }
@@ -227,11 +234,13 @@ export default function EventDetailsDashboardPage() {
       }
     } catch (error) {
       console.error("Failed to fetch event data:", error);
+      setLoadError("Could not reach the server. Please try again.");
     }
 
     setEventData(eventObj);
     if (eventObj) {
-      const computedStatus = getDynamicEventStatus(eventObj.startDate, eventObj.endDate, eventObj.status);
+      // Use the raw ISO schedule; locale-formatted strings are ambiguous (M/D vs D/M)
+      const computedStatus = getDynamicEventStatus(eventObj.startRaw, eventObj.endRaw, eventObj.status);
       setEventStatus(computedStatus as any);
 
       // Check if event is ended and ADMIN cleanup prompt should show
@@ -270,10 +279,38 @@ export default function EventDetailsDashboardPage() {
     );
   }
 
+  if (!eventData) {
+    return (
+      <div className="w-full min-h-full bg-white flex items-center justify-center p-6">
+        <div className="max-w-md w-full border border-gray-200 rounded-md p-8 text-center space-y-4">
+          <h2 className="text-lg font-bold text-gray-900">Event unavailable</h2>
+          <p className="text-xs text-gray-500 break-words">
+            {loadError || "Event not found or you do not have access to it."}
+          </p>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => fetchData()}
+              className="px-4 py-2 border border-gray-200 rounded-md text-xs font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              Retry
+            </button>
+            <Link
+              href="/events"
+              className="px-4 py-2 bg-[#FF5B22] hover:bg-[#E04B16] text-white rounded-md text-xs font-semibold"
+            >
+              Back to Events
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const isEventEnded = () => {
     if (!eventData) return false;
     const now = new Date();
-    const endRaw = eventData.schedule?.end || eventData.endDate;
+    const endRaw = eventData.endRaw;
     const endDate = endRaw ? new Date(endRaw) : null;
     return (endDate && !isNaN(endDate.getTime()) && now > endDate) || eventStatus === "Completed" || eventData.status === "COMPLETED";
   };
@@ -328,7 +365,7 @@ export default function EventDetailsDashboardPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-3 flex-wrap">
-              <h2 className="text-2xl font-bold text-gray-900">{eventData?.title || "Test Event"}</h2>
+              <h2 className="text-2xl font-bold text-gray-900">{eventData?.title}</h2>
               <span className="px-2.5 py-0.5 border border-[#FF5B22] text-[#FF5B22] text-[11px] font-medium rounded-md bg-[#FF5B22]/5">
                 {eventData?.category || "Event"}
               </span>
@@ -354,7 +391,7 @@ export default function EventDetailsDashboardPage() {
                   Completed
                 </span>
               )}
-              <span className="text-gray-600 font-medium">Organized by: <span className="font-semibold text-gray-800">{eventData?.organizerId?.fullName || eventData?.organizer || user?.fullName || "Super Admin"}</span></span>
+              <span className="text-gray-600 font-medium">Organized by: <span className="font-semibold text-gray-800">{eventData?.organizerId?.fullName || eventData?.organizer || "—"}</span></span>
               <span className="text-gray-300">|</span>
               <span><span className="font-semibold text-gray-700">Start:</span> {eventData?.startDate || 'N/A'}</span>
               <span className="text-gray-300">|</span>
@@ -529,17 +566,17 @@ export default function EventDetailsDashboardPage() {
 
                         <div className="my-auto py-3">
                           <p className="text-[10px] font-bold text-[#FF5B22] uppercase tracking-widest">INVITATION PASS</p>
-                          <h4 className="font-extrabold text-base text-white mt-1 leading-tight">{eventData?.title || "Tech Summit 2026"}</h4>
+                          <h4 className="font-extrabold text-base text-white mt-1 leading-tight">{eventData?.title}</h4>
                           <p className="text-xs text-gray-300 font-medium mt-1">
                             Host: <span className="text-white font-bold">{eventData?.organizerId?.fullName || eventData?.organizer || user?.fullName || "Organizer"}</span>
                           </p>
                           <div className="mt-3 inline-block bg-white/10 backdrop-blur-xs px-3 py-1 rounded-md text-xs font-semibold text-white border border-white/20">
-                            {eventData?.startDate ? new Date(eventData.startDate).toLocaleString() : "Date TBD"}
+                            {eventData?.startRaw ? new Date(eventData.startRaw).toLocaleString() : "Date TBD"}
                           </div>
                         </div>
 
                         <div className="border-t border-white/20 pt-2 text-[10px] text-gray-300 font-medium truncate">
-                          📍 {eventData?.venue || (typeof eventData?.location === "string" ? eventData.location : eventData?.location?.address) || "Main Venue Hall"}
+                          📍 {eventData?.venue || (typeof eventData?.location === "string" ? eventData.location : eventData?.location?.address) || "Venue to be announced"}
                         </div>
                       </div>
                     );

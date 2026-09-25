@@ -50,16 +50,16 @@ export default function InvitationCard({ data, className = "" }: InvitationCardP
         .then((url) => setGeneratedQr(url))
         .catch(() => {});
     } else {
-      // Sample QR for preview
-      const sampleUrl = `https://lgpsm.app/invitation/sample-token-${data.invitee.id || "preview"}`;
-      QRCode.toDataURL(sampleUrl, { errorCorrectionLevel: "H", margin: 1 })
+      // Preview only: the real QR carries a secret token issued when the invitation is sent
+      const previewPayload = "LGPSM invitation preview - the personal QR code is issued when the invitation is sent";
+      QRCode.toDataURL(previewPayload, { errorCorrectionLevel: "H", margin: 1 })
         .then((url) => setGeneratedQr(url))
         .catch(() => {});
     }
   }, [data.qrDataUrl, data.invitationUrl, data.invitee.id]);
 
   // Split title into main and year (if year present)
-  const fullTitle = (data.event?.title || "TECH SUMMIT 2026").trim();
+  const fullTitle = (data.event?.title || "Event").trim();
   const titleWords = fullTitle.split(" ");
   let mainTitlePart = fullTitle;
   let yearPart = "";
@@ -68,13 +68,13 @@ export default function InvitationCard({ data, className = "" }: InvitationCardP
     mainTitlePart = titleWords.join(" ");
   }
 
-  const subtitleText = data.event?.subtitle || "INNOVATE  |  COLLABORATE  |  LEAD";
-  const dateMain = data.event?.date || "15 OCT 2026";
-  const dateSub = data.event?.dayOfWeek || "THURSDAY";
-  const timeMain = data.event?.startTime || "09:00 AM";
-  const timeSub = data.event?.timeSub || "ONWARDS";
-  const venueMain = data.event?.venue || "RCCIIT AUDITORIUM";
-  const venueSub = data.event?.locationSub || "KOLKATA, WB";
+  const subtitleText = data.event?.subtitle ?? "";
+  const dateMain = data.event?.date || "DATE TBA";
+  const dateSub = data.event?.dayOfWeek ?? "";
+  const timeMain = data.event?.startTime || "TIME TBA";
+  const timeSub = data.event?.timeSub ?? "";
+  const venueMain = data.event?.venue || "VENUE TBA";
+  const venueSub = data.event?.locationSub ?? "";
   const inviteeName = data.invitee?.name || "Subrata Saha";
 
   const sessions = data.sessions && data.sessions.length > 0
@@ -223,12 +223,14 @@ export default function InvitationCard({ data, className = "" }: InvitationCardP
 
           {/* Invitee Name & Company */}
           <div className="space-y-0.5">
-            <h1 className="text-xl sm:text-3xl md:text-4xl font-black text-white tracking-tight drop-shadow-md">
+            <h1 className="text-xl sm:text-3xl md:text-4xl font-black text-white tracking-tight drop-shadow-md break-words">
               {inviteeName}
             </h1>
-            <p className="text-[11px] sm:text-xs font-bold text-[#CF5317] tracking-[0.2em] uppercase">
-              {data.invitee?.companyName || "LGPSM"}
-            </p>
+            {data.invitee?.companyName && (
+              <p className="text-[11px] sm:text-xs font-bold text-[#CF5317] tracking-[0.2em] uppercase break-words">
+                {data.invitee.companyName}
+              </p>
+            )}
           </div>
 
           {/* Invitation Text */}

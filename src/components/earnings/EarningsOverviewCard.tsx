@@ -50,7 +50,7 @@ export default function EarningsOverviewCard({
               </span>
               {isSavedNotice && (
                 <span className="text-xs font-semibold text-emerald-600 animate-in fade-in">
-                  Rate Saved!
+                  Rate applied to estimates (not stored on server)
                 </span>
               )}
             </div>
@@ -78,7 +78,7 @@ export default function EarningsOverviewCard({
                 onClick={onSaveRate}
                 className="px-5 py-2 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shrink-0 shadow-xs"
               >
-                Save
+                Apply
               </button>
             </div>
           </div>
