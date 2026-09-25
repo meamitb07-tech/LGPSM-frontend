@@ -5,6 +5,7 @@ import React, { useState, useRef, useEffect } from "react";
 export interface CustomDropdownOption {
   value: string;
   label: string;
+  icon?: React.ReactNode;
 }
 
 export interface CustomDropdownAction {
@@ -60,8 +61,9 @@ export default function CustomDropdown({
               : "bg-white border-gray-200/90 hover:border-[#FF5B22] hover:bg-white text-gray-700"
           }`}
       >
-        <span className={selectedOption ? "text-gray-800 font-semibold" : "text-gray-400 font-normal"}>
-          {selectedOption ? selectedOption.label : placeholder}
+        <span className={`inline-flex items-center gap-2 ${selectedOption ? "text-gray-800 font-semibold" : "text-gray-400 font-normal"}`}>
+          {selectedOption?.icon && <span className="shrink-0">{selectedOption.icon}</span>}
+          <span className="truncate">{selectedOption ? selectedOption.label : placeholder}</span>
         </span>
         <svg
           className={`w-4 h-4 text-gray-400 shrink-0 transform transition-transform duration-200 ${isOpen ? "rotate-180 text-[#FF5B22]" : ""
@@ -109,12 +111,15 @@ export default function CustomDropdown({
                       onChange(opt.value);
                       setIsOpen(false);
                     }}
-                    className={`w-full text-left px-3.5 py-2 text-xs transition-colors flex items-center justify-between cursor-pointer ${isSelected
+                    className={`w-full text-left px-3.5 py-2.5 text-xs transition-colors flex items-center justify-between cursor-pointer ${isSelected
                         ? "bg-orange-50/80 text-[#FF5B22] font-bold"
                         : "text-gray-700 font-medium hover:bg-orange-50/50 hover:text-[#FF5B22]"
                       }`}
                   >
-                    <span>{opt.label}</span>
+                    <span className="inline-flex items-center gap-2">
+                      {opt.icon && <span className="shrink-0">{opt.icon}</span>}
+                      <span>{opt.label}</span>
+                    </span>
                     {isSelected && (
                       <svg className="w-3.5 h-3.5 text-[#FF5B22]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />

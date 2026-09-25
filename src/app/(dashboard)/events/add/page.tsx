@@ -209,7 +209,12 @@ export default function AddEventPage() {
       <div className="flex-1 flex flex-col">
         {/* Top Navbar Header */}
         <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between shrink-0">
-          <h1 className="text-xl font-bold text-gray-900 tracking-tight">Add Event</h1>
+          <div className="flex items-center gap-3">
+            <svg className="w-7 h-7 text-[#FF5B22] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            <h1 className="text-xl font-bold text-gray-900 tracking-tight">Add Event</h1>
+          </div>
 
           <UserNavDropdown />
         </header>

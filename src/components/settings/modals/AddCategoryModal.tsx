@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { categoryService } from "@/services/categoryService";
 
 interface AddCategoryModalProps {
   isOpen: boolean;
@@ -14,12 +15,21 @@ export default function AddCategoryModal({
   onAddCategory,
 }: AddCategoryModalProps) {
   const [name, setName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+    try {
+      setSubmitting(true);
+      await categoryService.createCategory({ name: name.trim() });
+    } catch (err) {
+      console.error("Error creating category on backend:", err);
+    } finally {
+      setSubmitting(false);
+    }
     onAddCategory(name.trim());
     setName("");
     onClose();

@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
 import UserNavDropdown from "@/components/common/UserNavDropdown";
+import { categoryService, Category } from "@/services/categoryService";
+import { templateService, Template } from "@/services/templateService";
 
 interface TemplateItem {
   id: string;
@@ -16,16 +18,59 @@ interface TemplateItem {
 
 export default function TemplatesPage() {
   const { user } = useAuth();
-  const [templates] = useState<TemplateItem[]>([]);
+  const [templates, setTemplates] = useState<TemplateItem[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("Personal");
   const [selectedSubcategory, setSelectedSubcategory] = useState("Birthday");
   const [previewTemplate, setPreviewTemplate] = useState<TemplateItem | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true);
+        const [catRes, tmplRes] = await Promise.allSettled([
+          categoryService.getCategories(),
+          templateService.getTemplates(),
+        ]);
+
+        if (catRes.status === "fulfilled" && catRes.value?.success && Array.isArray(catRes.value.data)) {
+          setCategories(catRes.value.data);
+          if (catRes.value.data.length > 0) {
+            setSelectedCategory(catRes.value.data[0].name);
+          }
+        }
+
+        if (tmplRes.status === "fulfilled" && tmplRes.value?.success && Array.isArray(tmplRes.value.data)) {
+          const formatted: TemplateItem[] = tmplRes.value.data.map((t: Template) => ({
+            id: t._id || t.id || String(Math.random()),
+            name: t.name,
+            title: t.name,
+            category: typeof (t as any).category === "object" ? (t as any).category?.name : (t.categoryId || "General"),
+            subcategory: t.subcategoryId || "General",
+            imageUrl: t.previewImageKey || "/images/auth/login_side_img.png",
+          }));
+          setTemplates(formatted);
+        }
+      } catch (err) {
+        console.error("Failed to load templates or categories:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
 
   return (
     <div className="w-full min-h-full bg-white text-gray-900 font-sans">
       {/* Header */}
       <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
-        <h1 className="text-xl font-bold text-gray-900">Templates</h1>
+        <div className="flex items-center gap-3">
+          <svg className="w-7 h-7 text-[#FF5B22] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+          </svg>
+          <h1 className="text-xl font-bold text-gray-900">Templates</h1>
+        </div>
         <UserNavDropdown />
       </header>
 
@@ -43,8 +88,18 @@ export default function TemplatesPage() {
                 onChange={(e) => setSelectedCategory(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-md text-xs text-gray-800 focus:outline-none focus:border-[#FF5B22] cursor-pointer"
               >
-                <option value="Personal">Personal</option>
-                <option value="Corporate">Corporate</option>
+                {categories.length > 0 ? (
+                  categories.map((cat) => (
+                    <option key={cat._id || cat.id} value={cat.name}>
+                      {cat.name}
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="Personal">Personal</option>
+                    <option value="Corporate">Corporate</option>
+                  </>
+                )}
               </select>
             </div>
 

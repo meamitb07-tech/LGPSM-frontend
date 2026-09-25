@@ -58,4 +58,22 @@ export const userService = {
     const url = role ? `/api/users?role=${role}` : "/api/users/";
     return apiClient<UserData[]>(url, { method: "GET" }, true);
   },
+
+  async deleteUser(userId: string): Promise<ApiResponse<any>> {
+    return apiClient<any>(`/api/users/${userId}`, { method: "DELETE" }, true);
+  },
+
+  async updateUser(
+    userId: string,
+    payload: { fullName?: string; email?: string; phone?: string; password?: string }
+  ): Promise<ApiResponse<UserData>> {
+    return apiClient<UserData>(
+      `/api/users/${userId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      },
+      true
+    );
+  },
 };

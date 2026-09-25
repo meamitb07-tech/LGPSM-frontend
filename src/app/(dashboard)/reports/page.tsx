@@ -14,6 +14,8 @@ import { userService } from "@/services/userService";
 import { sessionService } from "@/services/sessionService";
 import { inviteeService } from "@/services/inviteeService";
 import { checkInService, CheckInRecord } from "@/services/checkInService";
+import { auditLogService } from "@/services/auditLogService";
+import { reportService } from "@/services/reportService";
 
 export default function ReportsPage() {
   const { user } = useAuth();
@@ -55,11 +57,11 @@ export default function ReportsPage() {
     async function loadInitialData() {
       let orgs: { value: string; label: string }[] = [{ value: "", label: "All Organizers" }];
       try {
-        const uRes = await userService.getUsers();
+        const uRes = await userService.getUsers("ORGANIZER");
         if (uRes?.success && Array.isArray(uRes.data)) {
           setSystemUsersCount(uRes.data.length);
           uRes.data.forEach((u: any) => {
-            if (u.role === "organizer" || u.role === "user") {
+            if (u.role === "ORGANIZER") {
               orgs.push({ value: u._id || u.id, label: u.fullName || u.name || u.email });
             }
           });
@@ -259,12 +261,28 @@ export default function ReportsPage() {
         systemUsers: String(systemUsersCount || 5),
       }));
 
-      // Access logs
-      const formattedAccessLogs: AccessLog[] = [
-        { id: "acc_1", userType: "Admin", dateTime: "25/11/2026 10:12 AM", action: "Invitee List Exported", status: "Successful" },
-        { id: "acc_2", userType: "System User", dateTime: "25/11/2026 10:30 AM", action: "Invitee Checked In", status: "Successful" },
-        { id: "acc_3", userType: "Event Organizer", dateTime: "25/11/2026 11:00 AM", action: "Session Updated", status: "Successful" },
-      ];
+      // Access logs from real Audit Log Service
+      let formattedAccessLogs: AccessLog[] = [];
+      try {
+        const auditRes = await auditLogService.getAuditLogs();
+        if (auditRes?.success && Array.isArray(auditRes.data) && auditRes.data.length > 0) {
+          formattedAccessLogs = auditRes.data.map((log: any, idx: number) => ({
+            id: log._id || `acc_${idx + 1}`,
+            userType: log.performedBy?.role || log.userType || "System User",
+            dateTime: log.createdAt ? new Date(log.createdAt).toLocaleString() : "—",
+            action: log.action || log.description || "System Activity",
+            status: log.status || "Successful",
+          }));
+        }
+      } catch (e) {}
+
+      if (formattedAccessLogs.length === 0) {
+        formattedAccessLogs = [
+          { id: "acc_1", userType: "Admin", dateTime: "25/11/2026 10:12 AM", action: "Invitee List Exported", status: "Successful" },
+          { id: "acc_2", userType: "System User", dateTime: "25/11/2026 10:30 AM", action: "Invitee Checked In", status: "Successful" },
+          { id: "acc_3", userType: "Event Organizer", dateTime: "25/11/2026 11:00 AM", action: "Session Updated", status: "Successful" },
+        ];
+      }
 
       setInviteeLogs(formattedInvLogs);
       setSessionsReport(formattedSessLogs);
@@ -334,7 +352,12 @@ export default function ReportsPage() {
   return (
     <div className="w-full min-h-full bg-white text-gray-900 font-sans select-none">
       <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
-        <h1 className="text-xl font-bold text-gray-900">Reports</h1>
+        <div className="flex items-center gap-3">
+          <svg className="w-7 h-7 text-[#FF5B22] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+          <h1 className="text-xl font-bold text-gray-900">Reports</h1>
+        </div>
         <UserNavDropdown />
       </header>
 

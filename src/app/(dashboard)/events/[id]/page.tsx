@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { eventService } from "@/services/eventService";
@@ -281,7 +282,12 @@ export default function EventDetailsDashboardPage() {
     <div className="w-full min-h-full bg-white text-gray-900 font-sans">
       {/* Top Navigation Bar */}
       <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
-        <h1 className="text-xl font-bold text-gray-900">Event</h1>
+        <div className="flex items-center gap-3">
+          <svg className="w-7 h-7 text-[#FF5B22] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h1 className="text-xl font-bold text-gray-900">Event Overview</h1>
+        </div>
         <UserNavDropdown />
       </header>
 
@@ -362,7 +368,7 @@ export default function EventDetailsDashboardPage() {
               <button
                 type="button"
                 onClick={() => setIsCleanupModalOpen(true)}
-                className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-md shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-md shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -373,9 +379,12 @@ export default function EventDetailsDashboardPage() {
 
             <Link
               href={`/events/${eventId}/edit`}
-              className="px-4 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-semibold rounded-md transition-colors shadow-2xs"
+              className="px-4 py-2 bg-white border-2 border-[#FF5B22] text-[#FF5B22] hover:bg-[#FF5B22] hover:text-white text-xs font-bold rounded-md shadow-xs transition-all flex items-center gap-2 cursor-pointer active:scale-95"
             >
-              Edit Event
+              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              <span>Edit Event</span>
             </Link>
           </div>
         </div>
@@ -483,23 +492,58 @@ export default function EventDetailsDashboardPage() {
                 </svg>
               </div>
 
-              {/* Card Poster Container */}
-              <div className="bg-[#FFF5F2] border border-orange-100 rounded-md p-3 flex flex-col items-center justify-center text-center">
-                <div className="w-full h-80 rounded-md overflow-hidden relative shadow-xs bg-amber-900/10 flex items-center justify-center">
-                  <div className="absolute inset-0 bg-gradient-to-b from-[#8B1E24] to-[#5C1116] p-4 text-amber-200 flex flex-col justify-between items-center text-center">
-                    <div className="text-xl tracking-widest text-amber-300 mt-2">卐</div>
-                    <div>
-                      <p className="text-[10px] tracking-widest text-amber-200 uppercase">{eventData?.title || "EVENT"}</p>
-                      <h4 className="font-serif text-lg text-amber-300 mt-1">{eventData?.organizerId?.fullName || eventData?.organizer || user?.fullName || "Organizer"}</h4>
-                      <p className="text-[9px] text-amber-200/80 mt-1">{eventData?.category || "Corporate"}</p>
-                      <p className="text-[8px] text-amber-200/60 font-medium mt-1">
-                        {eventData?.startDate || "Date TBD"}
-                      </p>
-                    </div>
-                    <div className="text-[8px] text-amber-200/70 border-t border-amber-300/30 pt-2 w-full truncate px-2">
-                      {eventData?.venue || eventData?.location || "Grand Ballroom, Tech City"}
-                    </div>
-                  </div>
+              {/* Dynamic Card Poster Container */}
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex flex-col items-center justify-center text-center">
+                <div className="w-full h-80 rounded-lg overflow-hidden relative shadow-md bg-slate-950 flex flex-col justify-between p-4 text-white">
+                  {(() => {
+                    const templateImg =
+                      (typeof eventData?.templateId === "object" ? (eventData?.templateId as any)?.imageUrl || (eventData?.templateId as any)?.previewUrl || (eventData?.templateId as any)?.url : null) ||
+                      (typeof eventData?.templateId === "string" && (eventData.templateId.startsWith("http") || eventData.templateId.startsWith("/")) ? eventData.templateId : null) ||
+                      (eventData as any)?.templateUrl ||
+                      (eventData as any)?.cardBgImage ||
+                      null;
+
+                    if (templateImg) {
+                      return (
+                        <Image
+                          src={templateImg}
+                          alt={eventData?.title || "Event Invitation Card"}
+                          fill
+                          priority
+                          sizes="400px"
+                          className="object-cover object-center rounded-lg"
+                        />
+                      );
+                    }
+
+                    return (
+                      <div className="relative z-10 flex flex-col justify-between h-full w-full select-none">
+                        <div className="flex items-center justify-between border-b border-white/20 pb-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF5B22] bg-white/90 px-2.5 py-0.5 rounded-full shadow-xs">
+                            {eventData?.category || "Official Pass"}
+                          </span>
+                          <span className="text-[10px] text-gray-300 font-semibold">
+                            {eventData?.isPublic ? "Public Event" : "Exclusive Pass"}
+                          </span>
+                        </div>
+
+                        <div className="my-auto py-3">
+                          <p className="text-[10px] font-bold text-[#FF5B22] uppercase tracking-widest">INVITATION PASS</p>
+                          <h4 className="font-extrabold text-base text-white mt-1 leading-tight">{eventData?.title || "Tech Summit 2026"}</h4>
+                          <p className="text-xs text-gray-300 font-medium mt-1">
+                            Host: <span className="text-white font-bold">{eventData?.organizerId?.fullName || eventData?.organizer || user?.fullName || "Organizer"}</span>
+                          </p>
+                          <div className="mt-3 inline-block bg-white/10 backdrop-blur-xs px-3 py-1 rounded-md text-xs font-semibold text-white border border-white/20">
+                            {eventData?.startDate ? new Date(eventData.startDate).toLocaleString() : "Date TBD"}
+                          </div>
+                        </div>
+
+                        <div className="border-t border-white/20 pt-2 text-[10px] text-gray-300 font-medium truncate">
+                          📍 {eventData?.venue || (typeof eventData?.location === "string" ? eventData.location : eventData?.location?.address) || "Main Venue Hall"}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>

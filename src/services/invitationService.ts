@@ -7,6 +7,7 @@ export interface SendInvitationsPayload {
 
 export interface ResendInvitationsPayload {
   invitationIds: string[];
+  channel?: "EMAIL" | "SMS" | "WHATSAPP";
 }
 
 export interface SendResult {
@@ -146,5 +147,22 @@ export const invitationService = {
       method: "POST",
       body: JSON.stringify(payload),
     }, false);
+  },
+
+  /**
+   * Download / preview rendered invitation card PNG for a specific invitee
+   * GET /api/v1/events/:eventId/invitations/preview?inviteeId=:inviteeId
+   */
+  async previewCardPNG(eventId: string, inviteeId?: string): Promise<Blob> {
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+    const token = typeof window !== "undefined" ? localStorage.getItem("app_auth_token") : null;
+    const url = inviteeId
+      ? `${API_BASE_URL}/api/v1/events/${eventId}/invitations/preview?inviteeId=${inviteeId}`
+      : `${API_BASE_URL}/api/v1/events/${eventId}/invitations/preview`;
+    const res = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error("Failed to fetch invitation card preview");
+    return res.blob();
   },
 };

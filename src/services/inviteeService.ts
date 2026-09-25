@@ -27,14 +27,26 @@ export interface CreateInviteePayload {
   email?: string;
   mobile?: string;
   company?: string;
+  companyName?: string;
   designation?: string;
   category?: string;
+  dietaryPreference?: string;
+  rsvpStatus?: "PENDING" | "ACCEPTED" | "DECLINED";
   sessionAccess?: SessionAccessItem[];
 }
 
 export interface BulkSessionAccessPayload {
   inviteeIds: string[];
   sessionAccess: SessionAccessItem[];
+}
+
+export interface ImportExcelResult {
+  totalRows: number;
+  imported: number;
+  updated?: number;
+  rejected: number;
+  duplicateCount: number;
+  errors?: { row: number; error: string }[];
 }
 
 export const inviteeService = {
@@ -94,11 +106,11 @@ export const inviteeService = {
    * Import invitees from Excel file (.xlsx / .xls)
    * POST /api/v1/events/:eventId/invitees/import
    */
-  async importExcel(eventId: string, file: File): Promise<ApiResponse<{ importedCount: number; errors?: any[] }>> {
+  async importExcel(eventId: string, file: File): Promise<ApiResponse<ImportExcelResult>> {
     const formData = new FormData();
     formData.append("file", file);
 
-    return apiClient<{ importedCount: number; errors?: any[] }>(
+    return apiClient<ImportExcelResult>(
       `/api/v1/events/${eventId}/invitees/import`,
       {
         method: "POST",

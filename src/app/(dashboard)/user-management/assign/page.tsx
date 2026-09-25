@@ -56,7 +56,7 @@ export const getAssignedCountText = (assignments: SystemUserRow["assignments"] =
   return `${eventLabel} & ${sessionLabel}`;
 };
 
-export default function AssignSystemUsersPage() {
+export default function AssignedSystemUsersPage() {
   const { user } = useAuth();
   const { showAlert } = useAlert();
   const [users, setUsers] = useState<SystemUserRow[]>([]);
@@ -71,6 +71,10 @@ export default function AssignSystemUsersPage() {
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isAssignSuccessModalOpen, setIsAssignSuccessModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<SystemUserRow | null>(null);
+  const [editFormData, setEditFormData] = useState({ name: "", email: "", phone: "" });
+  const [submittingEdit, setSubmittingEdit] = useState(false);
 
   // Form states
   const [addUserData, setAddUserData] = useState({ userName: "", contactNo: "", email: "", password: "" });
@@ -90,9 +94,9 @@ export default function AssignSystemUsersPage() {
       // 1. Fetch system users only (role === SYSTEM_USER)
       const usersRes = await userService.getUsers("SYSTEM_USER");
       const rawUsers = Array.isArray(usersRes?.data) ? usersRes.data : [];
-      
+
       // Filter out ADMIN & ORGANIZER strictly as UX defense
-      const systemUsersOnly = rawUsers.filter(u => u.role === "SYSTEM_USER");
+      const systemUsersOnly = rawUsers.filter((u) => u.role === "SYSTEM_USER");
 
       // 2. Fetch events
       const eventsRes = await eventService.getEvents();
@@ -146,15 +150,17 @@ export default function AssignSystemUsersPage() {
         }
       }
 
-      // Format final SystemUserRow list
-      const formattedUserRows: SystemUserRow[] = systemUsersOnly.map((u: any) => ({
-        id: u._id || u.id,
-        name: u.fullName || u.name || "System User",
-        email: u.email || "",
-        phone: u.phone || u.contactNo || "--",
-        role: u.role,
-        assignments: userAssignmentsMap[u._id || u.id] || [],
-      }));
+      // Format final SystemUserRow list - FILTER strictly for ASSIGNED users on this page!
+      const formattedUserRows: SystemUserRow[] = systemUsersOnly
+        .map((u: any) => ({
+          id: u._id || u.id,
+          name: u.fullName || u.name || "System User",
+          email: u.email || "",
+          phone: u.phone || u.contactNo || "--",
+          role: u.role,
+          assignments: userAssignmentsMap[u._id || u.id] || [],
+        }))
+        .filter((u) => u.assignments.length > 0); // SHOW ONLY ASSIGNED SYSTEM USERS
 
       setUsers(formattedUserRows);
     } catch (err: any) {
@@ -214,7 +220,7 @@ export default function AssignSystemUsersPage() {
         email: addUserData.email,
         phone: addUserData.contactNo,
         password: addUserData.password || "Password123!",
-        role: "SYSTEM_USER", // Strictly create as SYSTEM_USER
+        role: "SYSTEM_USER",
       });
 
       if (res.success) {
@@ -228,6 +234,46 @@ export default function AssignSystemUsersPage() {
       setErrorFeedback(err.message || "Error creating system user.");
     } finally {
       setSubmittingUser(false);
+    }
+  };
+
+  // Handle editing user
+  const handleOpenEdit = (u: SystemUserRow) => {
+    setEditingUser(u);
+    setEditFormData({
+      name: u.name,
+      email: u.email,
+      phone: u.phone === "--" ? "" : u.phone,
+    });
+    setActiveActionId(null);
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+
+    try {
+      setSubmittingEdit(true);
+      setErrorFeedback(null);
+
+      const res = await userService.updateUser(editingUser.id, {
+        fullName: editFormData.name,
+        email: editFormData.email,
+        phone: editFormData.phone,
+      });
+
+      if (res.success) {
+        setIsEditModalOpen(false);
+        setEditingUser(null);
+        await loadData();
+      } else {
+        setErrorFeedback(res.message || "Failed to update user.");
+      }
+    } catch (err: any) {
+      setErrorFeedback(err.message || "Error updating user.");
+    } finally {
+      setSubmittingEdit(false);
     }
   };
 
@@ -289,6 +335,22 @@ export default function AssignSystemUsersPage() {
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedIds.length} selected user(s)?`)) return;
+
+    try {
+      setErrorFeedback(null);
+      for (const id of selectedIds) {
+        await userService.deleteUser(id);
+      }
+      setSelectedIds([]);
+      await loadData();
+    } catch (err: any) {
+      setErrorFeedback(err.message || "Failed to delete users.");
+    }
+  };
+
   const toggleExpandUser = (id: string) => {
     if (expandedUserIds.includes(id)) {
       setExpandedUserIds(expandedUserIds.filter((i) => i !== id));
@@ -298,10 +360,10 @@ export default function AssignSystemUsersPage() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.length === users.length) {
+    if (selectedIds.length === filteredUsers.length && filteredUsers.length > 0) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(users.map((u) => u.id));
+      setSelectedIds(filteredUsers.map((u) => u.id));
     }
   };
 
@@ -324,7 +386,12 @@ export default function AssignSystemUsersPage() {
     <div className="flex-1 flex flex-col min-w-0 bg-white select-none font-sans">
       {/* Header */}
       <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
-        <h1 className="text-xl font-bold text-gray-900">Assign System Users</h1>
+        <div className="flex items-center gap-3">
+          <svg className="w-7 h-7 text-[#FF5B22] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+          <h1 className="text-xl font-bold text-gray-900">Assigned System Users</h1>
+        </div>
         <UserNavDropdown />
       </header>
 
@@ -383,18 +450,26 @@ export default function AssignSystemUsersPage() {
           </button>
         </div>
 
-        {/* Select All Checkbox */}
+        {/* Custom Green/White Tick Select All Checkbox */}
         <div className="flex items-center gap-2 text-xs font-semibold text-gray-600 pt-1">
-          <input
-            type="checkbox"
-            id="selectAll"
-            checked={selectedIds.length === filteredUsers.length && filteredUsers.length > 0}
-            onChange={toggleSelectAll}
-            className="rounded border-gray-300 text-[#FF5B22] focus:ring-[#FF5B22] cursor-pointer"
-          />
-          <label htmlFor="selectAll" className="cursor-pointer">
-            Select All ({selectedIds.length} selected)
-          </label>
+          <button
+            type="button"
+            onClick={toggleSelectAll}
+            className={`w-4 h-4 rounded-sm flex items-center justify-center transition-colors border cursor-pointer ${
+              selectedIds.length === filteredUsers.length && filteredUsers.length > 0
+                ? "bg-[#10B981] border-[#10B981] text-white"
+                : "bg-white border-gray-300 hover:border-gray-400"
+            }`}
+          >
+            {selectedIds.length === filteredUsers.length && filteredUsers.length > 0 && (
+              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </button>
+          <span onClick={toggleSelectAll} className="cursor-pointer">
+            Select All
+          </span>
         </div>
 
         {/* Table Container */}
@@ -416,14 +491,14 @@ export default function AssignSystemUsersPage() {
                   <td colSpan={6} className="py-12 text-center text-gray-500 text-sm">
                     <div className="flex flex-col items-center justify-center space-y-3">
                       <div className="w-6 h-6 border-2 border-[#FF5B22] border-t-transparent rounded-full animate-spin"></div>
-                      <p>Loading system users...</p>
+                      <p>Loading assigned system users...</p>
                     </div>
                   </td>
                 </tr>
               ) : filteredUsers.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-gray-400 text-sm">
-                    No SYSTEM_USER accounts found. Click "Add User" to create a system user account.
+                    No assigned system users found. Assign users from the All Users tab.
                   </td>
                 </tr>
               ) : (
@@ -436,19 +511,24 @@ export default function AssignSystemUsersPage() {
                   return (
                     <tr key={u.id} className="hover:bg-gray-50/80 transition-colors align-top">
                       <td className="py-4 px-4">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleSelectRow(u.id)}
-                          className="rounded border-gray-300 text-[#FF5B22] focus:ring-[#FF5B22] cursor-pointer mt-0.5"
-                        />
+                        <button
+                          type="button"
+                          onClick={() => toggleSelectRow(u.id)}
+                          className={`w-4 h-4 rounded-sm flex items-center justify-center transition-colors border cursor-pointer mt-0.5 ${
+                            isSelected ? "bg-[#10B981] border-[#10B981] text-white" : "bg-white border-gray-300 hover:border-gray-400"
+                          }`}
+                        >
+                          {isSelected && (
+                            <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </button>
                       </td>
 
+                      {/* User Name Only (No SYSTEM_USER badge) */}
                       <td className="py-4 px-4 font-medium text-gray-900">
                         <div>{u.name}</div>
-                        <span className="text-[10px] font-mono text-[#FF5B22] bg-[#FF5B22]/10 px-1.5 py-0.5 rounded">
-                          SYSTEM_USER
-                        </span>
                       </td>
 
                       {/* Assigned Events & Sessions Cards */}
@@ -518,19 +598,14 @@ export default function AssignSystemUsersPage() {
                       <td className="py-4 px-4 text-gray-600">{u.phone}</td>
 
                       <td className="py-4 px-4 text-right relative">
-                        <button
-                          type="button"
-                          onClick={() => setActiveActionId(isActionActive ? null : u.id)}
-                          className="p-1 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
-                        >
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M6 10a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4z" />
-                          </svg>
-                        </button>
-
-                        {isActionActive && (
-                          <div className="absolute right-4 top-12 z-30 bg-[#1E232A] text-white text-xs font-semibold px-3 py-2 rounded-md shadow-xl border border-gray-700 flex items-center gap-2 cursor-pointer hover:bg-gray-800">
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(u)}
+                            className="p-1 text-gray-500 hover:text-[#FF5B22] transition-colors cursor-pointer"
+                            title="Edit User"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
@@ -538,7 +613,34 @@ export default function AssignSystemUsersPage() {
                                 d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
                               />
                             </svg>
-                            <span>Edit User</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setActiveActionId(isActionActive ? null : u.id)}
+                            className="p-1 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                          >
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M6 10a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4z" />
+                            </svg>
+                          </button>
+                        </div>
+
+                        {isActionActive && (
+                          <div className="absolute right-4 top-12 z-30 bg-[#1E232A] text-white text-xs font-semibold px-3 py-2 rounded-md shadow-xl border border-gray-700 flex flex-col gap-1 cursor-pointer">
+                            <button
+                              onClick={() => handleOpenEdit(u)}
+                              className="flex items-center gap-2 hover:text-[#FF5B22] transition-colors w-full text-left py-1"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                                />
+                              </svg>
+                              <span>Edit User</span>
+                            </button>
                           </div>
                         )}
                       </td>
@@ -550,28 +652,106 @@ export default function AssignSystemUsersPage() {
           </table>
         </div>
 
-        {/* Bottom Control Bar */}
-        <div className="pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-1 text-xs">
-            <button className="w-8 h-8 rounded border border-[#FF5B22] text-[#FF5B22] font-bold flex items-center justify-center">
-              1
-            </button>
-          </div>
-
-          <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto">
-            <button
-              type="button"
-              onClick={() => setIsAssignModalOpen(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 border border-[#FF5B22] text-[#FF5B22] hover:bg-[#FF5B22] hover:text-white font-bold text-xs rounded-md transition-colors cursor-pointer"
-            >
-              <span>Assign {selectedIds.length} users</span>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-              </svg>
-            </button>
-          </div>
+        {/* Bottom Control Bar with Trash Can icon beside Assign users button */}
+        <div className="pt-4 flex flex-col sm:flex-row sm:items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={handleBulkDelete}
+            disabled={selectedIds.length === 0}
+            className="p-2.5 text-[#FF5B22] hover:text-red-600 hover:bg-red-50 border border-transparent disabled:opacity-30 disabled:hover:bg-transparent rounded-md transition-colors cursor-pointer"
+            title="Delete Selected Users"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsAssignModalOpen(true)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 border border-[#FF5B22] text-[#FF5B22] hover:bg-[#FF5B22] hover:text-white font-bold text-xs rounded-md transition-colors cursor-pointer shrink-0"
+          >
+            <span>Assign {selectedIds.length} users</span>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </button>
         </div>
       </main>
+
+      {/* ── Edit User Modal ── */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-md border border-gray-200 shadow-2xl max-w-md w-full overflow-hidden space-y-6">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-base font-bold text-gray-900">Edit System User</h3>
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 cursor-pointer"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="px-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-800">
+                  User Name<span className="text-[#FF5B22]">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-md text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#FF5B22] transition-colors"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-800">
+                  Email<span className="text-[#FF5B22]">*</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={editFormData.email}
+                  onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-md text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#FF5B22] transition-colors"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-800">Contact No</label>
+                <input
+                  type="tel"
+                  value={editFormData.phone}
+                  onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-md text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#FF5B22] transition-colors"
+                />
+              </div>
+
+              <div className="pt-2 pb-6 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-5 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-semibold rounded-md transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingEdit}
+                  className="px-6 py-2 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                >
+                  {submittingEdit ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ── Add User Modal ── */}
       {isAddUserModalOpen && (
