@@ -6,6 +6,8 @@ import { useAuth } from "@/context/AuthContext";
 import { eventService, EventData } from "@/services/eventService";
 
 import { getDynamicEventStatus } from "@/utils/eventUtils";
+import { formatEventId } from "@/utils/formatId";
+import { formatDateTime } from "@/utils/dateTime";
 import UserNavDropdown from "@/components/common/UserNavDropdown";
 
 interface EventRow {
@@ -17,13 +19,14 @@ interface EventRow {
   category: string;
   startDate: string;
   endDate: string;
-  status: "Upcoming" | "Completed" | "Ongoing" | "Invitation Sent";
+  status: "Upcoming" | "Completed" | "Ongoing" | "Invitation Sent" | "Cancelled";
 }
 
 export default function EventListingPage() {
   const { user } = useAuth();
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
@@ -32,6 +35,7 @@ export default function EventListingPage() {
 
   const loadEvents = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const res = await eventService.getEvents();
       const rawList = Array.isArray(res?.data)
@@ -41,7 +45,7 @@ export default function EventListingPage() {
       if (res && res.success && Array.isArray(rawList)) {
         const apiMapped: EventRow[] = rawList.map((item: any, index: number) => {
           const id = item._id || item.id || String(index + 1);
-          const eventId = `#${String(id).slice(-4).toUpperCase()}`;
+          const eventId = formatEventId(id);
 
           const rawStatus = (item.status || "Upcoming").toString().toUpperCase();
           let mappedStatus: "Upcoming" | "Completed" | "Ongoing" | "Invitation Sent" = "Upcoming";
@@ -55,27 +59,34 @@ export default function EventListingPage() {
 
           const startVal = item.schedule?.start || item.startDate;
           const endVal = item.schedule?.end || item.endDate;
-          const dynamicStatus = getDynamicEventStatus(startVal, endVal, mappedStatus);
+          // A deleted event is soft-deleted (CANCELLED) by the backend; show that instead of a date-derived status
+          const dynamicStatus = rawStatus === "CANCELLED"
+            ? "Cancelled"
+            : getDynamicEventStatus(startVal, endVal, mappedStatus);
 
           return {
             id,
             eventId,
             eventName: item.title || "Untitled Event",
-            organizer: item.organizerId?.fullName || user?.fullName || "Organizer",
+            organizer: item.organizerId?.fullName
+              || (String(item.organizerId) === String(user?._id) ? user?.fullName : "")
+              || "—",
             createdOn: item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "Recently",
-            category: item.category || item.categoryId?.name || "Corporate",
-            startDate: startVal ? new Date(startVal).toLocaleString() : "TBD",
-            endDate: endVal ? new Date(endVal).toLocaleString() : "TBD",
+            category: item.category || item.categoryId?.name || "—",
+            startDate: formatDateTime(startVal, "TBD"),
+            endDate: formatDateTime(endVal, "TBD"),
             status: dynamicStatus as EventRow["status"],
           };
         });
         setEvents(apiMapped);
       } else {
         setEvents([]);
+        setLoadError(res?.message || "Failed to load events.");
       }
     } catch (e) {
       console.error("Failed to fetch events from API:", e);
       setEvents([]);
+      setLoadError("Could not reach the server. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -83,9 +94,13 @@ export default function EventListingPage() {
 
   const handleDeleteEvent = async (id: string) => {
     try {
-      await eventService.deleteEvent(id);
+      const res = await eventService.deleteEvent(id);
+      if (!res.success) {
+        setLoadError(res.message || "Failed to delete event.");
+      }
     } catch (e) {
       console.warn("Backend delete error:", e);
+      setLoadError("Failed to delete event.");
     }
 
     setDeletingEventId(null);
@@ -128,7 +143,12 @@ export default function EventListingPage() {
     <div className="w-full min-h-full bg-white text-gray-900 font-sans">
       {/* Top Header Bar */}
       <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
-        <h1 className="text-xl font-bold text-gray-900">Event</h1>
+        <div className="flex items-center gap-3">
+          <svg className="w-7 h-7 text-[#FF5B22] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <h1 className="text-xl font-bold text-gray-900">Events</h1>
+        </div>
         <UserNavDropdown />
       </header>
 
@@ -191,6 +211,14 @@ export default function EventListingPage() {
           </div>
 
           {/* Events Table Container with padding bottom for dropdown overflow */}
+          {loadError && events.length > 0 && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-md text-xs font-medium flex items-center justify-between gap-3">
+              <span className="break-words min-w-0">{loadError}</span>
+              <button type="button" onClick={() => setLoadError(null)} className="font-semibold shrink-0 cursor-pointer">
+                Dismiss
+              </button>
+            </div>
+          )}
           <div className="overflow-x-auto pt-2 pb-24">
             <table className="w-full text-left text-xs whitespace-nowrap">
               <thead>
@@ -211,6 +239,15 @@ export default function EventListingPage() {
                   <tr>
                     <td colSpan={9} className="py-8 text-center text-gray-500 font-medium">
                       Loading events...
+                    </td>
+                  </tr>
+                ) : loadError && events.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-8 text-center text-rose-600 font-medium">
+                      {loadError}{" "}
+                      <button type="button" onClick={() => loadEvents()} className="underline font-semibold cursor-pointer">
+                        Retry
+                      </button>
                     </td>
                   </tr>
                 ) : filteredEvents.length === 0 ? (
@@ -442,6 +479,7 @@ export default function EventListingPage() {
                     <option value="Completed">Completed</option>
                     <option value="Ongoing">Ongoing</option>
                     <option value="Invitation Sent">Invitation Sent</option>
+                    <option value="Cancelled">Cancelled</option>
                   </select>
                 </div>
 

@@ -24,12 +24,19 @@ export default function CameraCaptureModal({
     setError("");
     setIsCameraReady(false);
 
+    let cancelled = false;
+
     async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { width: 640, height: 480, facingMode: "user" },
           audio: false,
         });
+        // The modal may have closed while the permission prompt was open
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -38,16 +45,18 @@ export default function CameraCaptureModal({
             setIsCameraReady(true);
           };
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error("Camera access error:", err);
-        setError("Could not access camera. Please check browser permissions.");
+        if (!cancelled) setError("Could not access camera. Please check browser permissions.");
       }
     }
 
     startCamera();
 
     return () => {
-      stopCamera();
+      cancelled = true;
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
     };
   }, [isOpen]);
 

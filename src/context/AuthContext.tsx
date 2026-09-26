@@ -60,11 +60,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (payload: RegisterPayload): Promise<ApiResponse> => {
     const res = await authService.register(payload);
-    if (res.success && res.data?.user) {
-      setUser(res.data.user);
-      if (res.data.accessToken) tokenStorage.setAccessToken(res.data.accessToken);
+    if (!res.success) return res;
+
+    // Registration returns only the created user; sign in to obtain a real session
+    const loginRes = await login({ email: payload.email, password: payload.password, role: payload.role });
+    if (!loginRes.success) {
+      return { success: false, message: `Account created, but automatic sign-in failed: ${loginRes.message || "please sign in manually."}` };
     }
-    return res;
+    return loginRes;
   };
 
   const logout = async (): Promise<void> => {

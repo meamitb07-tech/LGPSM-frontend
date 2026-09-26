@@ -1,101 +1,96 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import Step1BasicFields from "./step1/Step1BasicFields";
 import Step1CategoryDateFields from "./step1/Step1CategoryDateFields";
 import Step1ContactLogoFields from "./step1/Step1ContactLogoFields";
+import { DraftErrors, EventDraft } from "./eventDraft";
+import { Category } from "@/services/categoryService";
+import { formatDateTime } from "@/utils/dateTime";
+
+export type EventDateField = "start" | "end" | "rsvpDeadline";
 
 interface Step1EventDetailsProps {
+  draft: EventDraft;
+  onChange: (patch: Partial<EventDraft>) => void;
+  onOpenDatePicker: (field: EventDateField) => void;
+  categories: Category[];
+  categoriesError?: string | null;
+  errors: DraftErrors;
+  logoFile: { name: string; url: string } | null;
+  setLogoFile: (val: { name: string; url: string } | null) => void;
   onNext: () => void;
-  onOpenDatePicker: (field: "start" | "end" | "rsvp") => void;
-  startDate: string;
-  endDate: string;
-  rsvpDate: string;
-  initialData?: any;
-  onDataChange?: (data: any) => void;
+  onCancel: () => void;
 }
 
+// Controlled step: all values live in the wizard draft owned by the page
 export default function Step1EventDetails({
-  onNext,
+  draft,
+  onChange,
   onOpenDatePicker,
-  startDate,
-  endDate,
-  rsvpDate,
-  initialData,
-  onDataChange,
+  categories,
+  categoriesError,
+  errors,
+  logoFile,
+  setLogoFile,
+  onNext,
+  onCancel,
 }: Step1EventDetailsProps) {
-  const [logoFile, setLogoFile] = useState<{ name: string; url: string } | null>(null);
-
-  const [title, setTitle] = useState(initialData?.title || "");
-  const [description, setDescription] = useState(initialData?.description || "");
-  const [category, setCategory] = useState(initialData?.category || "Personal");
-  const [subcategory, setSubcategory] = useState(initialData?.subcategory || "Birthday");
-  const [contactNumber, setContactNumber] = useState(initialData?.contactNumber || "");
-  const [enableRsvp, setEnableRsvp] = useState(true);
-  const [address, setAddress] = useState(initialData?.venue || "");
-
-  useEffect(() => {
-    if (initialData) {
-      setTitle(initialData.title || "");
-      setDescription(initialData.description || "");
-      setCategory(initialData.category || "Personal");
-      setSubcategory(initialData.subcategory || "Birthday");
-      setContactNumber(initialData.contactNumber || "");
-      setAddress(initialData.venue || "");
-    }
-  }, [initialData]);
+  const selectedCategory = categories.find((c) => c._id === draft.categoryId);
+  const categoryOptions = categories.map((c) => ({ value: c._id, label: c.name }));
+  const subcategoryOptions = (selectedCategory?.subcategories || [])
+    .filter((s) => s._id)
+    .map((s) => ({ value: s._id as string, label: s.name }));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (onDataChange) {
-      onDataChange({
-        title,
-        description,
-        category,
-        subcategory,
-        contactNumber,
-        venue: address,
-      });
-    }
     onNext();
   };
 
   return (
     <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6 font-sans text-xs">
       <Step1BasicFields
-        title={title}
-        setTitle={setTitle}
-        description={description}
-        setDescription={setDescription}
+        title={draft.title}
+        setTitle={(title) => onChange({ title })}
+        description={draft.description}
+        setDescription={(description) => onChange({ description })}
+        titleError={errors.title}
       />
 
       <Step1CategoryDateFields
-        category={category}
-        setCategory={setCategory}
-        subcategory={subcategory}
-        setSubcategory={setSubcategory}
-        startDate={startDate}
-        endDate={endDate}
-        onOpenDatePicker={onOpenDatePicker}
+        category={draft.categoryId}
+        setCategory={(categoryId) => onChange({ categoryId, subcategoryId: "" })}
+        subcategory={draft.subcategoryId}
+        setSubcategory={(subcategoryId) => onChange({ subcategoryId })}
+        categoryOptions={categoryOptions}
+        subcategoryOptions={subcategoryOptions}
+        categoriesError={categoriesError}
+        startDate={formatDateTime(draft.start)}
+        endDate={formatDateTime(draft.end)}
+        startError={errors.start}
+        endError={errors.end}
+        onOpenDatePicker={(field) => onOpenDatePicker(field === "rsvp" ? "rsvpDeadline" : field)}
       />
 
       <Step1ContactLogoFields
-        contactNumber={contactNumber}
-        setContactNumber={setContactNumber}
+        contactNumber={draft.contactNumber}
+        setContactNumber={(contactNumber) => onChange({ contactNumber })}
         logoFile={logoFile}
         setLogoFile={setLogoFile}
-        enableRsvp={enableRsvp}
-        setEnableRsvp={setEnableRsvp}
-        rsvpDate={rsvpDate}
-        onOpenDatePicker={onOpenDatePicker}
-        address={address}
-        setAddress={setAddress}
+        enableRsvp={draft.rsvpEnabled}
+        setEnableRsvp={(rsvpEnabled) => onChange({ rsvpEnabled })}
+        rsvpDate={formatDateTime(draft.rsvpDeadline)}
+        rsvpError={errors.rsvpDeadline}
+        onOpenDatePicker={(field) => onOpenDatePicker(field === "rsvp" ? "rsvpDeadline" : field)}
+        address={draft.venue}
+        setAddress={(venue) => onChange({ venue })}
       />
 
       {/* Footer Actions */}
       <div className="pt-6 border-t border-gray-200 flex items-center justify-end gap-3">
         <button
           type="button"
+          onClick={onCancel}
           className="px-6 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-800 font-bold rounded-lg transition-colors cursor-pointer"
         >
           Cancel

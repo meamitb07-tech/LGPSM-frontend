@@ -15,14 +15,14 @@ export function parseEventDate(dateStr: any): Date | null {
   // Handle DD/MM/YY or DD/MM/YYYY with optional time like "23/09/26 03.00 PM" or "23/09/2026 03:00 PM"
   const match = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2})[.:](\d{2})(?:\s+(AM|PM))?)?/i);
   if (match) {
-    let [, dayStr, monthStr, yearStr, hourStr, minStr, ampm] = match;
-    let day = parseInt(dayStr, 10);
-    let month = parseInt(monthStr, 10) - 1;
+    const [, dayStr, monthStr, yearStr, hourStr, minStr, ampm] = match;
+    const day = parseInt(dayStr, 10);
+    const month = parseInt(monthStr, 10) - 1;
     let year = parseInt(yearStr, 10);
     if (year < 100) year += 2000;
 
     let hour = hourStr ? parseInt(hourStr, 10) : 0;
-    let min = minStr ? parseInt(minStr, 10) : 0;
+    const min = minStr ? parseInt(minStr, 10) : 0;
     if (ampm) {
       const upper = ampm.toUpperCase();
       if (upper === "PM" && hour < 12) hour += 12;
@@ -75,3 +75,59 @@ export function getDynamicEventStatus(
 
   return "Upcoming";
 }
+
+export function formatPhoneNumber(phone?: string): string {
+  if (!phone || typeof phone !== "string") return "";
+
+  const trimmed = phone.trim();
+  if (!trimmed) return "";
+
+  let digits = trimmed.replace(/\D/g, "");
+  if (!digits) return trimmed;
+
+  // Handle leading zero (e.g. 09903107102 -> 9903107102)
+  if (digits.length === 11 && digits.startsWith("0")) {
+    digits = digits.slice(1);
+  }
+
+  // 10 digits (Standard Indian mobile number without country code) -> +91 XXXXX XXXXX
+  if (digits.length === 10) {
+    return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
+  }
+
+  // 12 digits starting with 91 (India with country code 91) -> +91 XXXXX XXXXX
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return `+91 ${digits.slice(2, 7)} ${digits.slice(7)}`;
+  }
+
+  // 11 digits starting with 1 (US / Canada) -> +1 XXX XXX XXXX
+  if (digits.length === 11 && digits.startsWith("1")) {
+    return `+1 ${digits.slice(1, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
+  }
+
+  // Generic formatting for other international country codes
+  if (digits.length > 10) {
+    const ccLen = digits.length - 10;
+    const cc = digits.slice(0, ccLen);
+    const rest = digits.slice(ccLen);
+    return `+${cc} ${rest.slice(0, 5)} ${rest.slice(5)}`;
+  }
+
+  return trimmed.startsWith("+") ? trimmed : `+${digits}`;
+}
+
+export function isValidEmail(email?: string): boolean {
+  if (!email || typeof email !== "string") return false;
+  const trimmed = email.trim().toLowerCase();
+  if (!trimmed) return false;
+  return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(trimmed);
+}
+
+export function isValidMobile(mobile?: string): boolean {
+  if (!mobile || typeof mobile !== "string") return false;
+  const trimmed = mobile.trim();
+  if (!trimmed) return false;
+  const digits = trimmed.replace(/\D/g, "");
+  return digits.length >= 7 && digits.length <= 15;
+}
+

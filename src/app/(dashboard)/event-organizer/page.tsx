@@ -24,37 +24,34 @@ export default function AllOrganizersPage() {
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadOrganizers() {
       setLoading(true);
       let list: OrganizerRow[] = [];
+      setLoadError(null);
 
       try {
-        const stored = localStorage.getItem("app_local_organizers");
-        if (stored) {
-          list = JSON.parse(stored);
+        const res = await userService.getUsers("ORGANIZER");
+        if (!res?.success) {
+          setLoadError(res?.message || "Failed to load organizers.");
         }
-      } catch (e) { }
-
-      try {
-        const res = await userService.getUsers();
         if (res?.success && Array.isArray(res.data)) {
-          const apiOrgs = res.data.map((u: any, idx: number) => ({
+          const organizerUsersOnly = res.data.filter((u: any) => u.role === "ORGANIZER");
+          const apiOrgs = organizerUsersOnly.map((u: any, idx: number) => ({
             id: u._id || u.id || `org_${idx}`,
             name: u.fullName || u.name || "Event Organizer",
             email: u.email || "--",
-            phone: u.phone || "+91 9876543210",
-            status: (u.status || "Active") as any,
+            phone: u.phone || u.contactNo || "--",
+            status: (u.isActive === false ? "In Active" : "Active") as any,
           }));
 
-          apiOrgs.forEach((ao) => {
-            if (!list.some((o) => o.id === ao.id || o.email === ao.email)) {
-              list.push(ao);
-            }
-          });
+          list = apiOrgs;
         }
-      } catch (e) { }
+      } catch (e) {
+        setLoadError("Could not reach the server. Please try again.");
+      }
 
       setOrganizers(list);
       setLoading(false);
@@ -90,7 +87,12 @@ export default function AllOrganizersPage() {
     <div className="flex-1 flex flex-col min-w-0 bg-white">
         {/* Header */}
         <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
-          <h1 className="text-xl font-bold text-gray-900">Event Organizer</h1>
+          <div className="flex items-center gap-3">
+            <svg className="w-7 h-7 text-[#FF5B22] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h4m-4 0V11m0 0h4m-4 0H9m4 0V7m0 0h4m-4 0H9" />
+            </svg>
+            <h1 className="text-xl font-bold text-gray-900">Event Organizers</h1>
+          </div>
           <UserNavDropdown />
         </header>
 
@@ -188,12 +190,21 @@ export default function AllOrganizersPage() {
                 <thead>
                   <tr className="border-b border-gray-200 text-gray-400 font-medium text-[11px] bg-white">
                     <th className="py-3 px-4 w-10">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.length === organizers.length}
-                        onChange={toggleSelectAll}
-                        className="rounded border-gray-300 text-[#FF5B22] focus:ring-[#FF5B22] cursor-pointer"
-                      />
+                      <button
+                        type="button"
+                        onClick={toggleSelectAll}
+                        className={`w-4 h-4 rounded-sm flex items-center justify-center transition-colors border cursor-pointer ${
+                          selectedIds.length === filteredOrganizers.length && filteredOrganizers.length > 0
+                            ? "bg-[#10B981] border-[#10B981] text-white"
+                            : "bg-white border-gray-300 hover:border-gray-400"
+                        }`}
+                      >
+                        {selectedIds.length === filteredOrganizers.length && filteredOrganizers.length > 0 && (
+                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </button>
                     </th>
                     <th className="py-3 px-4 font-medium text-gray-400">Organizer</th>
                     <th className="py-3 px-4 font-medium text-gray-400">Email</th>
@@ -203,8 +214,14 @@ export default function AllOrganizersPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 text-gray-800">
-                  {filteredOrganizers.length === 0 && (
-                    <tr><td colSpan={6} className="py-12 text-center text-gray-400 text-sm">No organizer data available. Add an organizer to get started.</td></tr>
+                  {loading && (
+                    <tr><td colSpan={6} className="py-12 text-center text-gray-400 text-sm">Loading organizers...</td></tr>
+                  )}
+                  {!loading && loadError && (
+                    <tr><td colSpan={6} className="py-12 text-center text-rose-600 text-sm">{loadError}</td></tr>
+                  )}
+                  {!loading && !loadError && filteredOrganizers.length === 0 && (
+                    <tr><td colSpan={6} className="py-12 text-center text-gray-400 text-sm">No organizers found.</td></tr>
                   )}
                   {filteredOrganizers.map((org, idx) => {
                     const isSelected = selectedIds.includes(org.id);
@@ -214,12 +231,19 @@ export default function AllOrganizersPage() {
                     return (
                       <tr key={org.id} className="hover:bg-gray-50/80 transition-colors">
                         <td className="py-4 px-4">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleSelectRow(org.id)}
-                            className="rounded border-gray-300 text-[#FF5B22] focus:ring-[#FF5B22] cursor-pointer"
-                          />
+                          <button
+                            type="button"
+                            onClick={() => toggleSelectRow(org.id)}
+                            className={`w-4 h-4 rounded-sm flex items-center justify-center transition-colors border cursor-pointer ${
+                              isSelected ? "bg-[#10B981] border-[#10B981] text-white" : "bg-white border-gray-300 hover:border-gray-400"
+                            }`}
+                          >
+                            {isSelected && (
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </button>
                         </td>
 
                         {/* Organizer Name with link to details */}

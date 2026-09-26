@@ -6,7 +6,7 @@ import { TemplateItem } from "@/types/settings";
 
 interface TemplateGridItemProps {
   template: TemplateItem;
-  onEdit: (template: TemplateItem) => void;
+  onEdit?: (template: TemplateItem) => void;
 }
 
 export default function TemplateGridItem({ template, onEdit }: TemplateGridItemProps) {
@@ -23,9 +23,11 @@ export default function TemplateGridItem({ template, onEdit }: TemplateGridItemP
           className="object-cover group-hover:scale-105 transition-transform duration-300"
         />
 
-        {/* Top-Right Edit Button */}
+        {/* Top-Right Edit Button (admins only) */}
+        {onEdit && (
         <button
           onClick={() => onEdit(template)}
+          aria-label="Edit template"
           className="absolute top-2.5 right-2.5 p-1.5 bg-black/40 text-white rounded-md hover:bg-black/70 transition-colors z-10"
           title="Edit Template"
         >
@@ -38,6 +40,7 @@ export default function TemplateGridItem({ template, onEdit }: TemplateGridItemP
             />
           </svg>
         </button>
+        )}
 
         {/* Bottom Badge */}
         <div className="absolute bottom-2.5 left-2.5 right-2.5 flex justify-center">

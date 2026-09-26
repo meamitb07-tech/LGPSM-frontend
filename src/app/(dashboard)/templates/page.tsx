@@ -1,31 +1,90 @@
 "use client";
 
-import React, { useState } from "react";
-import Image from "next/image";
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import UserNavDropdown from "@/components/common/UserNavDropdown";
+import { categoryService, Category } from "@/services/categoryService";
+import { templateService, Template } from "@/services/templateService";
 
 interface TemplateItem {
   id: string;
   name: string;
   title?: string;
+  categoryId: string;
+  subcategoryId: string;
   category: string;
   subcategory: string;
-  imageUrl: string;
+  imageUrl?: string;
 }
 
 export default function TemplatesPage() {
   const { user } = useAuth();
-  const [templates] = useState<TemplateItem[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState("Personal");
-  const [selectedSubcategory, setSelectedSubcategory] = useState("Birthday");
+  const [templates, setTemplates] = useState<TemplateItem[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedSubcategory, setSelectedSubcategory] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<TemplateItem | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true);
+      setLoadError(null);
+      const [catRes, tmplRes] = await Promise.all([
+        categoryService.getCategories(),
+        templateService.getTemplates(),
+      ]);
+
+      const cats: Category[] = catRes.success && Array.isArray(catRes.data) ? catRes.data : [];
+      setCategories(cats);
+      const categoryName = (id?: string) => cats.find((c) => c._id === id)?.name || "—";
+      const subcategoryName = (id?: string) =>
+        cats.flatMap((c) => c.subcategories || []).find((sub) => sub._id === id)?.name || "—";
+
+      if (tmplRes.success && Array.isArray(tmplRes.data)) {
+        setTemplates(
+          tmplRes.data.map((t: Template) => {
+            const categoryId = typeof t.categoryId === "object" && t.categoryId ? t.categoryId._id : t.categoryId || "";
+            return {
+              id: t._id || t.id || "",
+              name: t.name,
+              title: t.name,
+              categoryId,
+              subcategoryId: t.subcategoryId || "",
+              category: categoryName(categoryId),
+              subcategory: subcategoryName(t.subcategoryId),
+              imageUrl: t.previewImageKey || undefined,
+            };
+          })
+        );
+      } else {
+        setTemplates([]);
+        setLoadError(tmplRes.message || "Failed to load templates.");
+      }
+      setLoading(false);
+    }
+    loadData();
+  }, []);
+
+  const subcategoryOptions = categories.find((c) => c._id === selectedCategory)?.subcategories || [];
+  const visibleTemplates = templates.filter(
+    (t) =>
+      (!selectedCategory || t.categoryId === selectedCategory) &&
+      (!selectedSubcategory || t.subcategoryId === selectedSubcategory)
+  );
 
   return (
     <div className="w-full min-h-full bg-white text-gray-900 font-sans">
       {/* Header */}
       <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
-        <h1 className="text-xl font-bold text-gray-900">Templates</h1>
+        <div className="flex items-center gap-3">
+          <svg className="w-7 h-7 text-[#FF5B22] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+          </svg>
+          <h1 className="text-xl font-bold text-gray-900">Templates</h1>
+        </div>
         <UserNavDropdown />
       </header>
 
@@ -40,11 +99,18 @@ export default function TemplatesPage() {
               </label>
               <select
                 value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
+                onChange={(e) => {
+                  setSelectedCategory(e.target.value);
+                  setSelectedSubcategory("");
+                }}
                 className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-md text-xs text-gray-800 focus:outline-none focus:border-[#FF5B22] cursor-pointer"
               >
-                <option value="Personal">Personal</option>
-                <option value="Corporate">Corporate</option>
+                <option value="">All Categories</option>
+                {categories.map((cat) => (
+                  <option key={cat._id} value={cat._id}>
+                    {cat.name}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -56,25 +122,34 @@ export default function TemplatesPage() {
               <select
                 value={selectedSubcategory}
                 onChange={(e) => setSelectedSubcategory(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-md text-xs text-gray-800 focus:outline-none focus:border-[#FF5B22] cursor-pointer"
+                disabled={!selectedCategory}
+                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-md text-xs text-gray-800 focus:outline-none focus:border-[#FF5B22] cursor-pointer disabled:bg-gray-50 disabled:cursor-not-allowed"
               >
-                <option value="Birthday">Birthday</option>
-                <option value="Anniversary">Anniversary</option>
-                <option value="Wedding">Wedding</option>
-                <option value="Conference">Conference</option>
+                <option value="">All Subcategories</option>
+                {subcategoryOptions.map((sub) => (
+                  <option key={sub._id || sub.name} value={sub._id || ""}>
+                    {sub.name}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
 
           {/* Templates Grid */}
-          {templates.length === 0 ? (
+          {loading ? (
+            <div className="py-16 text-center text-sm text-gray-400">Loading templates...</div>
+          ) : loadError ? (
+            <div className="py-16 text-center text-sm text-rose-600 break-words">{loadError}</div>
+          ) : visibleTemplates.length === 0 ? (
             <div className="col-span-full py-16 text-center">
-              <p className="text-gray-400 text-sm">No templates available yet.</p>
+              <p className="text-gray-400 text-sm">
+                {templates.length === 0 ? "No templates available yet." : "No templates match the selected category."}
+              </p>
               <p className="text-gray-300 text-xs mt-1">Templates will appear here once created.</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4 pt-2">
-              {templates.map((tmpl) => (
+              {visibleTemplates.map((tmpl) => (
                 <div
                   key={tmpl.id}
                   className="group relative bg-white border border-gray-200 rounded-md overflow-hidden shadow-2xs hover:shadow-md transition-all flex flex-col aspect-[3/4]"
@@ -91,14 +166,14 @@ export default function TemplatesPage() {
 
                   {/* Template Visual Card Placeholder */}
                   <div className="relative w-full h-full bg-gradient-to-br from-amber-100 via-rose-100 to-sky-100 flex flex-col items-center justify-center p-3 text-center">
-                    <div className="font-bold text-gray-800 text-sm tracking-tight drop-shadow-xs">
-                      HAPPY BIRTHDAY
+                    <div className="font-bold text-gray-800 text-sm tracking-tight drop-shadow-xs break-words line-clamp-3 max-w-full">
+                      {tmpl.name}
                     </div>
                     <div className="w-12 h-12 rounded-full bg-white/80 border border-white my-2 flex items-center justify-center text-[10px] font-semibold text-gray-600">
                       PHOTO
                     </div>
-                    <div className="text-[10px] text-gray-600 italic">
-                      Wish You All The Best
+                    <div className="text-[10px] text-gray-600 italic truncate max-w-full">
+                      {tmpl.category}
                     </div>
                   </div>
 
@@ -143,24 +218,21 @@ export default function TemplatesPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                   </svg>
                 </button>
-                <h4 className="text-xl font-extrabold tracking-wider mb-2">Happy Birthday</h4>
+                <h4 className="text-xl font-extrabold tracking-wider mb-2 text-center break-words max-w-full">{previewTemplate.title}</h4>
                 <p className="text-xs text-white/80 italic text-center max-w-[200px]">
-                  Wishing you joy, love, and success on your special day!
+                  {previewTemplate.subcategory !== "—" ? previewTemplate.subcategory : previewTemplate.category}
                 </p>
               </div>
 
               {/* Right Details */}
               <div className="space-y-4">
                 <div>
-                  <h4 className="text-xl font-bold text-gray-900">{previewTemplate.title}</h4>
+                  <h4 className="text-xl font-bold text-gray-900 break-words">{previewTemplate.title}</h4>
                   <p className="text-xs text-gray-500 font-medium mt-1">
                     <strong>Category:</strong> {previewTemplate.category} &nbsp;|&nbsp; <strong>Sub Category:</strong> {previewTemplate.subcategory}
                   </p>
                 </div>
 
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry&apos;s standard dummy text ever since the 1500s.
-                </p>
 
                 {/* Yellow Warning Note (Image 5) */}
                 <div className="bg-[#FEF9C3]/80 border border-[#FEF08A] rounded-md p-3.5 flex items-start gap-3">
@@ -173,10 +245,21 @@ export default function TemplatesPage() {
                 </div>
 
                 {/* Edit Template Button */}
-                <div className="pt-2">
-                  <button className="px-6 py-2.5 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-2xs">
-                    Edit Template
-                  </button>
+                <div className="pt-2 flex flex-wrap gap-3">
+                  <Link
+                    href="/events/add"
+                    className="px-6 py-2.5 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-2xs"
+                  >
+                    Create an Event
+                  </Link>
+                  {user?.role === "ADMIN" && (
+                    <Link
+                      href="/settings/template"
+                      className="px-6 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-semibold rounded-md transition-colors cursor-pointer"
+                    >
+                      Edit Template
+                    </Link>
+                  )}
                 </div>
               </div>
             </div>

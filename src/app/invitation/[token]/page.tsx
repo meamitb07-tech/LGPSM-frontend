@@ -122,6 +122,13 @@ export default function PublicInvitationPage() {
   }
 
   const { event, invitee } = invitationData!;
+  const locationText = typeof event.location === "string" ? event.location : event.location?.address || "";
+  const startDate = event.schedule?.start ? new Date(event.schedule.start) : null;
+  const endDate = event.schedule?.end ? new Date(event.schedule.end) : null;
+  const formatDateTime = (d: Date | null) =>
+    d && !isNaN(d.getTime())
+      ? d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })
+      : "TBD";
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 font-sans">
@@ -131,7 +138,7 @@ export default function PublicInvitationPage() {
           <span className="inline-block px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-semibold uppercase tracking-wider mb-2">
             Event Invitation
           </span>
-          <h1 className="text-2xl font-extrabold tracking-tight">{event.title}</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight break-words">{event.title}</h1>
           {event.format && (
             <p className="text-xs text-white/90 font-medium mt-1 uppercase tracking-wide">
               Format: {event.format}
@@ -142,10 +149,10 @@ export default function PublicInvitationPage() {
         {/* Card Content */}
         <div className="p-6 space-y-6">
           {/* Invitee Welcome */}
-          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 flex items-center justify-between">
-            <div>
+          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
               <p className="text-xs text-slate-500 font-medium">Invited Guest</p>
-              <h2 className="text-base font-bold text-slate-800">{invitee.name}</h2>
+              <h2 className="text-base font-bold text-slate-800 break-words">{invitee.name}</h2>
             </div>
             <div>
               <p className="text-xs text-slate-500 font-medium mb-0.5">RSVP Status</p>
@@ -168,11 +175,11 @@ export default function PublicInvitationPage() {
           {/* Event Details */}
           <div className="space-y-3">
             {event.description && (
-              <p className="text-xs text-slate-600 leading-relaxed">{event.description}</p>
+              <p className="text-xs text-slate-600 leading-relaxed break-words whitespace-pre-line">{event.description}</p>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-xs">
-              {event.location && (
+              {locationText && (
                 <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
                   <svg className="w-4 h-4 text-[#FF5B22] shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -180,7 +187,7 @@ export default function PublicInvitationPage() {
                   </svg>
                   <div>
                     <p className="font-semibold text-slate-700">Location</p>
-                    <p className="text-slate-500">{event.location}</p>
+                    <p className="text-slate-500 break-words">{locationText}</p>
                   </div>
                 </div>
               )}
@@ -193,7 +200,8 @@ export default function PublicInvitationPage() {
                   <div>
                     <p className="font-semibold text-slate-700">Date & Time</p>
                     <p className="text-slate-500">
-                      {event.schedule.startDate ? new Date(event.schedule.startDate).toLocaleDateString() : "TBD"}
+                      {formatDateTime(startDate)}
+                      {endDate && !isNaN(endDate.getTime()) ? ` – ${formatDateTime(endDate)}` : ""}
                     </p>
                   </div>
                 </div>

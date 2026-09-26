@@ -5,8 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import ChangePasswordModal from "@/components/settings/modals/ChangePasswordModal";
 import AvatarSection from "@/components/settings/AvatarSection";
 
-import { authService } from "@/services/authService";
-import { tokenStorage } from "@/services/tokenStorage";
+import { userService } from "@/services/userService";
 
 import UserNavDropdown from "@/components/common/UserNavDropdown";
 
@@ -14,6 +13,7 @@ export default function AccountSettingsPage() {
   const { user, updateProfile } = useAuth();
   const [fullName, setFullName] = useState(user?.fullName || "");
   const [email, setEmail] = useState(user?.email || "");
+  // (email is displayed read-only; the profile API does not change it)
   const [password, setPassword] = useState("••••••••••••••••");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(
     (user as any)?.avatarUrl || null
@@ -21,6 +21,7 @@ export default function AccountSettingsPage() {
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [savedMessage, setSavedMessage] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [avatarNotice, setAvatarNotice] = useState(false);
 
   useEffect(() => {
     if (user?.fullName) setFullName(user.fullName);
@@ -31,38 +32,27 @@ export default function AccountSettingsPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
-    try {
-      await updateProfile({ fullName, email, avatarUrl } as any);
-      setSavedMessage(true);
-      setTimeout(() => setSavedMessage(false), 3000);
-    } catch (err: any) {
-      setErrorMessage(err?.message || "Failed to update profile.");
+    // Only the name is editable through the profile API; email changes are not supported there
+    const res = await updateProfile({ fullName: fullName.trim() });
+    if (!res.success) {
+      setErrorMessage(res.message || "Failed to update profile.");
+      return;
     }
+    setSavedMessage(true);
+    setTimeout(() => setSavedMessage(false), 3000);
   };
 
-  const handleUpdatePassword = async (_oldPass: string, newPass: string): Promise<boolean> => {
+  const handleUpdatePassword = async (oldPass: string, newPass: string): Promise<boolean> => {
     setErrorMessage("");
-    const token = tokenStorage.getAccessToken();
-    if (!token) {
-      setErrorMessage("Authentication token not found. Please log in again.");
-      return false;
+    const res = await userService.changePassword(oldPass, newPass);
+    if (res.success) {
+      setPassword("••••••••••••••••");
+      setSavedMessage(true);
+      setTimeout(() => setSavedMessage(false), 3000);
+      return true;
     }
-
-    try {
-      const res = await authService.resetPassword(token, newPass);
-      if (res.success) {
-        setPassword("••••••••••••••••");
-        setSavedMessage(true);
-        setTimeout(() => setSavedMessage(false), 3000);
-        return true;
-      } else {
-        setErrorMessage(res.message || "Failed to update password in database.");
-        return false;
-      }
-    } catch (err: any) {
-      setErrorMessage(err?.message || "Failed to update password in database.");
-      return false;
-    }
+    setErrorMessage(res.message || "Failed to update password.");
+    return false;
   };
 
   const displayName = fullName || user?.fullName || user?.email || "Account Name";
@@ -71,7 +61,12 @@ export default function AccountSettingsPage() {
     <div className="w-full min-h-full bg-white font-sans text-gray-900 select-none">
       {/* Header */}
       <header className="h-16 bg-white border-b border-gray-200 px-6 flex items-center justify-between shrink-0 sticky top-0 z-20">
-        <h1 className="text-base font-bold text-gray-800">Account Settings</h1>
+        <div className="flex items-center gap-2.5">
+          <svg className="w-6 h-6 text-[#FF5B22] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+          <h1 className="text-base font-bold text-gray-800">Account Settings</h1>
+        </div>
         <UserNavDropdown />
       </header>
 
@@ -97,14 +92,20 @@ export default function AccountSettingsPage() {
             <AvatarSection
               avatarUrl={avatarUrl}
               onAvatarChange={(newUrl) => {
+                // No media storage is configured, so the photo is only previewed locally
                 setAvatarUrl(newUrl);
-                updateProfile({ fullName, email, avatarUrl: newUrl } as any);
+                setAvatarNotice(Boolean(newUrl));
               }}
             />
 
             {/* Profile Inputs */}
             <div className="flex-1 space-y-5 w-full">
-              <h3 className="text-xl font-bold text-gray-900">{displayName}</h3>
+              <h3 className="text-xl font-bold text-gray-900 break-words">{displayName}</h3>
+              {avatarNotice && (
+                <p className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                  Profile photo is shown for this session only - photo storage is not configured yet.
+                </p>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* Account Name */}
@@ -125,9 +126,9 @@ export default function AccountSettingsPage() {
                   <input
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs border border-gray-200/90 rounded-md bg-white focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#FF5B22]"
-                    required
+                    readOnly
+                    title="Email changes are not supported yet"
+                    className="w-full px-3.5 py-2.5 text-xs border border-gray-200/90 rounded-md bg-gray-50 text-gray-500 cursor-not-allowed focus:outline-none"
                   />
                 </div>
 

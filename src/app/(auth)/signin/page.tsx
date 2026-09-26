@@ -11,8 +11,8 @@ export default function SigninPage() {
   const router = useRouter();
   const { login } = useAuth();
 
-  // Mode Toggle State: "admin" | "user"
-  const [authMode, setAuthMode] = useState<"admin" | "user">("admin");
+  // Mode Toggle State: "admin" | "organizer" | "system_user"
+  const [authMode, setAuthMode] = useState<"admin" | "organizer" | "system_user">("admin");
 
   const heroRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
@@ -30,13 +30,17 @@ export default function SigninPage() {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const modeParam = params.get("mode");
-      if (modeParam === "user" || modeParam === "admin") {
-        setAuthMode(modeParam);
+      if (modeParam === "system_user" || modeParam === "user" || modeParam === "assigned_user") {
+        setAuthMode("system_user");
+      } else if (modeParam === "organizer") {
+        setAuthMode("organizer");
+      } else if (modeParam === "admin") {
+        setAuthMode("admin");
       }
     }
   }, []);
 
-  const handleModeSwitch = (mode: "admin" | "user") => {
+  const handleModeSwitch = (mode: "admin" | "organizer" | "system_user") => {
     setAuthMode(mode);
     setErrorMessage("");
     if (typeof window !== "undefined") {
@@ -47,7 +51,7 @@ export default function SigninPage() {
   };
 
   useEffect(() => {
-    if (authMode === "user") {
+    if (authMode !== "admin") {
       const ctx = gsap.context(() => {
         if (heroRef.current) {
           gsap.fromTo(
@@ -80,18 +84,13 @@ export default function SigninPage() {
     setIsSubmitting(true);
 
     try {
-      const targetRole = authMode === "admin" ? "ADMIN" : undefined;
+      const targetRole = authMode === "admin" ? "ADMIN" : authMode === "organizer" ? "ORGANIZER" : "SYSTEM_USER";
       const res = await login({ email, password, role: targetRole });
       if (res.success) {
         if (typeof window !== "undefined") {
           sessionStorage.setItem("show_dashboard_popup", "true");
         }
-        const role = res.data?.user?.role;
-        if (role === "SYSTEM_USER") {
-          router.push("/events");
-        } else {
-          router.push("/dashboard");
-        }
+        router.push("/dashboard");
       } else {
         setErrorMessage(res.message || "Invalid credentials. Please check your email and password.");
       }
@@ -104,13 +103,13 @@ export default function SigninPage() {
 
   return (
     <div className="min-h-screen bg-white font-sans text-gray-900 flex flex-col justify-between">
-      {/* ── Mode Toggle Switcher Banner (Floating Header) ── */}
+      {/* ── Mode Toggle Switcher Banner (Floating Header - 3 Tabs) ── */}
       <div className="w-full pt-4 pb-2 px-4 flex items-center justify-center z-30">
-        <div className="bg-gray-200/80 p-1 rounded-full flex items-center gap-1 shadow-2xs border border-gray-300/60">
+        <div className="bg-gray-200/80 p-1 rounded-full flex items-center gap-1 shadow-2xs border border-gray-300/60 overflow-x-auto">
           <button
             type="button"
             onClick={() => handleModeSwitch("admin")}
-            className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer shrink-0 ${
               authMode === "admin"
                 ? "bg-[#FF5B22] text-white shadow-xs"
                 : "text-gray-600 hover:text-gray-900"
@@ -120,14 +119,25 @@ export default function SigninPage() {
           </button>
           <button
             type="button"
-            onClick={() => handleModeSwitch("user")}
-            className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
-              authMode === "user"
+            onClick={() => handleModeSwitch("organizer")}
+            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer shrink-0 ${
+              authMode === "organizer"
                 ? "bg-[#FF5B22] text-white shadow-xs"
                 : "text-gray-600 hover:text-gray-900"
             }`}
           >
-            User / Organizer
+            Organizer
+          </button>
+          <button
+            type="button"
+            onClick={() => handleModeSwitch("system_user")}
+            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer shrink-0 ${
+              authMode === "system_user"
+                ? "bg-[#FF5B22] text-white shadow-xs"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Assigned User
           </button>
         </div>
       </div>
@@ -306,10 +316,12 @@ export default function SigninPage() {
               {/* Title & Subtitle */}
               <div className="mb-6">
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight mb-1.5">
-                  Sign in your account
+                  {authMode === "system_user" ? "Assigned User Sign In" : "Organizer Sign In"}
                 </h1>
                 <p className="text-xs sm:text-sm text-gray-500 font-normal">
-                  Welcome back! Login to manage your invitations
+                  {authMode === "system_user"
+                    ? "Welcome back! Login to view assigned events and scan attendee QR passes"
+                    : "Welcome back! Login to manage your events and invitations"}
                 </p>
               </div>
 

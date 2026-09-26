@@ -10,6 +10,7 @@ interface Step1ContactLogoFieldsProps {
   enableRsvp: boolean;
   setEnableRsvp: (val: boolean) => void;
   rsvpDate: string;
+  rsvpError?: string;
   onOpenDatePicker: (field: "start" | "end" | "rsvp") => void;
   address: string;
   setAddress: (val: string) => void;
@@ -23,6 +24,7 @@ export default function Step1ContactLogoFields({
   enableRsvp,
   setEnableRsvp,
   rsvpDate,
+  rsvpError,
   onOpenDatePicker,
   address,
   setAddress,
@@ -59,7 +61,7 @@ export default function Step1ContactLogoFields({
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className="font-semibold text-gray-900">
-              Event Logo/image<span className="text-[#FF5B22] ml-0.5">*</span>
+              Event Logo/image
             </label>
           </div>
 
@@ -108,6 +110,8 @@ export default function Step1ContactLogoFields({
               <p className="text-[11px] text-gray-400 font-medium">
                 Drag and drop a photo here or <br />
                 <span className="text-[#FF5B22] font-semibold underline">click to open file</span>
+                <br />
+                <span className="text-[10px]">Preview only - media storage is not configured yet</span>
               </p>
             </div>
           )}
@@ -133,7 +137,7 @@ export default function Step1ContactLogoFields({
         {enableRsvp && (
           <div>
             <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-              Acceptance Last Date<span className="text-[#FF5B22] ml-0.5">*</span>
+              Acceptance Last Date
             </label>
             <button
               type="button"
@@ -141,12 +145,13 @@ export default function Step1ContactLogoFields({
               className="w-full max-w-xs px-3.5 py-2 bg-white border border-gray-200 rounded-md text-gray-900 font-medium flex items-center justify-between text-left hover:bg-gray-100/70 transition-colors cursor-pointer"
             >
               <span className={rsvpDate ? "text-gray-900 font-semibold" : "text-gray-400"}>
-                {rsvpDate || "Select end date and time"}
+                {rsvpDate || "Optional - select last date to respond"}
               </span>
               <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             </button>
+            {rsvpError && <p className="mt-1 text-[11px] font-medium text-rose-600">{rsvpError}</p>}
           </div>
         )}
       </div>
@@ -165,16 +170,6 @@ export default function Step1ContactLogoFields({
             placeholder="Enter Event Address"
             className="w-full px-3 py-1.5 bg-transparent text-gray-900 placeholder:text-gray-400 focus:outline-none font-medium"
           />
-          <button
-            type="button"
-            className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-lg flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            Verify
-          </button>
         </div>
       </div>
     </>

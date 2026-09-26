@@ -111,13 +111,8 @@ export default function SignupPage() {
           sessionStorage.setItem("show_dashboard_popup", "true");
         }
         setSuccessMessage("Account created successfully! Redirecting...");
-        const role = res.data?.user?.role || targetRole;
         setTimeout(() => {
-          if (role === "SYSTEM_USER") {
-            router.push("/events");
-          } else {
-            router.push("/dashboard");
-          }
+          router.push("/dashboard");
         }, 800);
       } else {
         setErrorMessage(res.message || "Registration failed. Please check your inputs.");

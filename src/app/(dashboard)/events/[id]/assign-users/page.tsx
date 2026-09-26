@@ -8,6 +8,7 @@ import { sessionService } from "@/services/sessionService";
 import { userService } from "@/services/userService";
 import { assignmentService, AssignmentData } from "@/services/assignmentService";
 import EventSubNav, { notifyDbUpdate } from "@/components/EventSubNav";
+import SessionScopePicker from "@/components/common/SessionScopePicker";
 import UserNavDropdown from "@/components/common/UserNavDropdown";
 import { getAssignedCountText, SystemUserRow } from "@/app/(dashboard)/user-management/assign/page";
 
@@ -28,7 +29,8 @@ export default function EventAssignUsersPage() {
 
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isAssignSuccessModalOpen, setIsAssignSuccessModalOpen] = useState(false);
-  const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
+  // null = all sessions of this event
+  const [sessionScope, setSessionScope] = useState<string[] | null>(null);
   const [submittingAssign, setSubmittingAssign] = useState(false);
 
   const fetchAssignmentsAndSessions = async () => {
@@ -40,10 +42,6 @@ export default function EventAssignUsersPage() {
       const sessionsRes = await sessionService.getSessions(eventId);
       const sessionList = Array.isArray(sessionsRes?.data) ? sessionsRes.data : [];
       setSessions(sessionList);
-      if (sessionList.length > 0 && selectedSessionIds.length === 0) {
-        const firstSessId = sessionList[0]._id || sessionList[0].id;
-        if (firstSessId) setSelectedSessionIds([firstSessId]);
-      }
 
       // 2. Fetch system users only (role === SYSTEM_USER)
       const usersRes = await userService.getUsers("SYSTEM_USER");
@@ -156,7 +154,11 @@ export default function EventAssignUsersPage() {
   const handleAssignSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedUserIds.length === 0) {
-      alert("Please select at least one system user.");
+      setErrorFeedback("Please select at least one system user.");
+      return;
+    }
+    if (sessionScope !== null && sessionScope.length === 0) {
+      setErrorFeedback("Select at least one session, or choose \"All sessions\".");
       return;
     }
 
@@ -167,13 +169,13 @@ export default function EventAssignUsersPage() {
       const errors: string[] = [];
 
       for (const targetUserId of selectedUserIds) {
-        const res = await assignmentService.createAssignment(eventId, {
-          userId: targetUserId,
-          sessionIds: selectedSessionIds,
-        });
+        const existing = users
+          .find((u) => u.id === targetUserId)
+          ?.assignments.find((a) => a.eventId === eventId);
+        const res = await assignmentService.saveAssignment(eventId, targetUserId, sessionScope ?? [], existing?.assignmentId);
 
-        if (!res.success && res.message) {
-          errors.push(res.message);
+        if (!res.success) {
+          errors.push(res.message || "Assignment failed.");
         }
       }
 
@@ -181,8 +183,11 @@ export default function EventAssignUsersPage() {
         setErrorFeedback(errors.join(". "));
       }
 
+      // Only confirm success when at least one assignment was actually saved
       setIsAssignModalOpen(false);
-      setIsAssignSuccessModalOpen(true);
+      if (errors.length < selectedUserIds.length) {
+        setIsAssignSuccessModalOpen(true);
+      }
       await fetchAssignmentsAndSessions();
       notifyDbUpdate();
     } catch (err: any) {
@@ -206,7 +211,12 @@ export default function EventAssignUsersPage() {
     <div className="w-full min-h-full bg-white text-gray-900 font-sans select-none">
       {/* Top Navigation Bar */}
       <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
-        <h1 className="text-xl font-bold text-gray-900">Assign System Users</h1>
+        <div className="flex items-center gap-3">
+          <svg className="w-7 h-7 text-[#FF5B22] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+          <h1 className="text-xl font-bold text-gray-900">Assign System Users</h1>
+        </div>
         <UserNavDropdown />
       </header>
 
@@ -480,37 +490,15 @@ export default function EventAssignUsersPage() {
             </div>
 
             <form onSubmit={handleAssignSubmit} className="px-6 space-y-5">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-800">
-                  Select Event Sessions<span className="text-[#FF5B22]">*</span>
-                </label>
-                {sessions.length > 0 ? (
-                  <div className="space-y-2 border border-gray-200 rounded-md p-3 max-h-40 overflow-y-auto">
-                    {sessions.map((s) => {
-                      const id = s._id || s.id;
-                      return (
-                        <label key={id} className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={selectedSessionIds.includes(id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedSessionIds([...selectedSessionIds, id]);
-                              } else {
-                                setSelectedSessionIds(selectedSessionIds.filter((sid) => sid !== id));
-                              }
-                            }}
-                            className="rounded border-gray-300 text-[#FF5B22] focus:ring-[#FF5B22]"
-                          />
-                          <span>{s.name || s.title || "Session"}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-400 italic">No sessions found for this event.</p>
-                )}
-              </div>
+              <SessionScopePicker
+                sessions={sessions.map((sess, idx) => ({ id: String(sess._id || sess.id), name: sess.name || `Session ${idx + 1}` }))}
+                value={sessionScope}
+                onChange={setSessionScope}
+              />
+
+              {errorFeedback && (
+                <p role="alert" className="text-xs font-medium text-rose-600 break-words">{errorFeedback}</p>
+              )}
 
               <div className="pt-2 pb-6 flex items-center justify-end gap-3">
                 <button

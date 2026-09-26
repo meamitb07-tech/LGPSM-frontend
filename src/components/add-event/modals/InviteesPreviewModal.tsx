@@ -46,16 +46,9 @@ export default function InviteesPreviewModal({
     const opts: { value: string; label: string }[] = [
       { value: "all", label: "All Sessions" },
     ];
-    if (sessionsOptions && sessionsOptions.length > 0) {
-      sessionsOptions.forEach((s) => {
-        opts.push({ value: s.id, label: s.name });
-      });
-    } else {
-      opts.push(
-        { value: "entry", label: "Session 1 - Entry Session" },
-        { value: "lunch", label: "Session 2 - Lunch Session" }
-      );
-    }
+    sessionsOptions.forEach((s) => {
+      opts.push({ value: s.id, label: s.name });
+    });
     return opts;
   }, [sessionsOptions]);
 

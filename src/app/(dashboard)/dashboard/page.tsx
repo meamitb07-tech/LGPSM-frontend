@@ -4,10 +4,22 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { eventService } from "@/services/eventService";
+import { reportService } from "@/services/reportService";
+import { userService } from "@/services/userService";
 import { assignmentService, AssignmentData } from "@/services/assignmentService";
 import { getDynamicEventStatus } from "@/utils/eventUtils";
 import UserNavDropdown from "@/components/common/UserNavDropdown";
 import CheckInModal from "@/components/common/CheckInModal";
+
+interface OrganizerSummary {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  totalEvents: number;
+  ongoingEvents: number;
+  pastEvents: number;
+}
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -15,65 +27,93 @@ export default function DashboardPage() {
   // Organizer / Admin metric states
   const [totalEvents, setTotalEvents] = useState<number>(0);
   const [activeEvents, setActiveEvents] = useState<number>(0);
+  const [totalInvitees, setTotalInvitees] = useState<number>(0);
+  const [organizerCount, setOrganizerCount] = useState<number>(0);
+  const [topOrganizers, setTopOrganizers] = useState<OrganizerSummary[]>([]);
+  const [loadingMetrics, setLoadingMetrics] = useState<boolean>(true);
+  const [metricsError, setMetricsError] = useState<string | null>(null);
 
   // System User personalized assignments state
   const [myAssignments, setMyAssignments] = useState<AssignmentData[]>([]);
   const [loadingAssignments, setLoadingAssignments] = useState<boolean>(true);
+  const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
 
   // CheckIn Modal state
   const [checkInModalEvent, setCheckInModalEvent] = useState<{ id: string; title: string } | null>(null);
 
   const isSystemUser = user?.role === "SYSTEM_USER";
+  const isAdmin = user?.role === "ADMIN";
 
   useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+
     if (isSystemUser) {
       // Fetch personal assignments from GET /api/v1/users/me/assignments
-      async function fetchMyAssignments() {
-        try {
-          setLoadingAssignments(true);
-          const res = await assignmentService.getMyAssignments();
-          if (res?.success && Array.isArray(res.data)) {
-            setMyAssignments(res.data);
-          } else {
-            setMyAssignments([]);
-          }
-        } catch (err) {
-          console.error("Failed to fetch my assignments:", err);
+      (async () => {
+        setLoadingAssignments(true);
+        setAssignmentsError(null);
+        const res = await assignmentService.getMyAssignments();
+        if (cancelled) return;
+        if (res?.success && Array.isArray(res.data)) {
+          setMyAssignments(res.data);
+        } else {
           setMyAssignments([]);
-        } finally {
-          setLoadingAssignments(false);
+          setAssignmentsError(res?.message || "Failed to load your assignments.");
         }
-      }
-      fetchMyAssignments();
+        setLoadingAssignments(false);
+      })();
     } else {
-      // Fetch Organizer / Admin events
-      async function fetchDashboardMetrics() {
-        try {
-          let apiList: any[] = [];
-          try {
-            const res = await eventService.getEvents();
-            if (res?.success && res?.data) {
-              apiList = Array.isArray(res.data) ? res.data : (res.data as any).events || [];
-            }
-          } catch (e) { }
+      // Organizer / Admin metrics, all derived from backend data
+      (async () => {
+        setLoadingMetrics(true);
+        setMetricsError(null);
+        const [eventsRes, statsRes, organizersRes] = await Promise.all([
+          eventService.getEvents(),
+          reportService.getDashboardStats(),
+          isAdmin ? userService.getUsers("ORGANIZER") : Promise.resolve(null),
+        ]);
+        if (cancelled) return;
 
-          setTotalEvents(apiList.length);
+        const events: any[] = eventsRes?.success && Array.isArray(eventsRes.data) ? (eventsRes.data as any[]) : [];
+        if (!eventsRes?.success) setMetricsError(eventsRes?.message || "Failed to load events.");
 
-          const activeCount = apiList.filter((e: any) => {
-            const start = e.startDate || e.schedule?.start;
-            const end = e.endDate || e.schedule?.end;
-            const st = getDynamicEventStatus(start, end, e.status);
-            return st === "Upcoming" || st === "Ongoing";
-          }).length;
+        const statusOf = (e: any) =>
+          String(e.status || "").toUpperCase() === "CANCELLED"
+            ? "Cancelled"
+            : getDynamicEventStatus(e.schedule?.start || e.startDate, e.schedule?.end || e.endDate, e.status);
 
-          setActiveEvents(activeCount);
-        } catch (e) {
-          console.error("Dashboard metric fetch error:", e);
+        setTotalEvents(statsRes?.success && statsRes.data ? statsRes.data.totalEvents : events.length);
+        setTotalInvitees(statsRes?.success && statsRes.data ? statsRes.data.totalInvitees : 0);
+        setActiveEvents(events.filter((e) => ["Upcoming", "Ongoing"].includes(statusOf(e))).length);
+
+        if (isAdmin && organizersRes) {
+          const organizers = organizersRes.success && Array.isArray(organizersRes.data)
+            ? organizersRes.data.filter((u) => u.role === "ORGANIZER")
+            : [];
+          setOrganizerCount(organizers.length);
+          const summaries: OrganizerSummary[] = organizers.map((org) => {
+            const owned = events.filter((e) => String(e.organizerId?._id || e.organizerId) === String(org._id));
+            return {
+              id: org._id,
+              name: org.fullName,
+              email: org.email,
+              phone: org.phone || "—",
+              totalEvents: owned.length,
+              ongoingEvents: owned.filter((e) => ["Upcoming", "Ongoing"].includes(statusOf(e))).length,
+              pastEvents: owned.filter((e) => statusOf(e) === "Completed").length,
+            };
+          });
+          setTopOrganizers(summaries.sort((a, b) => b.totalEvents - a.totalEvents).slice(0, 5));
         }
-      }
-      fetchDashboardMetrics();
+        setLoadingMetrics(false);
+      })();
     }
-  }, [isSystemUser]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, isSystemUser, isAdmin]);
 
   // If System User, render personalized assignments dashboard
   if (isSystemUser) {
@@ -86,9 +126,14 @@ export default function DashboardPage() {
       <div className="w-full min-h-full bg-white text-gray-900 font-sans select-none">
         {/* Top Header Bar */}
         <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">My Assignments</h1>
-            <p className="text-xs text-gray-500">System User Operations Portal</p>
+          <div className="flex items-center gap-3">
+            <svg className="w-7 h-7 text-[#FF5B22] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">My Assignments</h1>
+              <p className="text-xs text-gray-500">System User Operations Portal</p>
+            </div>
           </div>
           <UserNavDropdown />
         </header>
@@ -143,6 +188,8 @@ export default function DashboardPage() {
               <div className="py-12 flex justify-center items-center">
                 <div className="w-6 h-6 border-2 border-[#FF5B22] border-t-transparent rounded-full animate-spin"></div>
               </div>
+            ) : assignmentsError ? (
+              <div className="py-12 text-center text-rose-600 text-xs font-medium break-words">{assignmentsError}</div>
             ) : myAssignments.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs whitespace-nowrap">
@@ -161,18 +208,24 @@ export default function DashboardPage() {
                       const eventObj = typeof item.eventId === "object" ? item.eventId : null;
                       const realEvtId = eventObj?._id || (typeof item.eventId === "string" ? item.eventId : "");
                       const eventTitle = eventObj?.title || "Event";
-                      const eventLocation = eventObj?.location || eventObj?.format || "Physical";
+                      const rawLocation: any = eventObj?.location;
+                      const eventLocation = (typeof rawLocation === "string" ? rawLocation : rawLocation?.address) || eventObj?.format || "—";
 
                       const assignedByObj = typeof item.assignedBy === "object" ? item.assignedBy : null;
                       const assignedByName = assignedByObj?.fullName || assignedByObj?.email || "Organizer";
 
                       return (
                         <tr key={item._id} className="hover:bg-gray-50/80 transition-colors">
-                          <td className="py-4 px-4 font-bold text-gray-900">
+                          <td className="py-4 px-4 font-bold text-gray-900 max-w-[240px] truncate" title={eventTitle}>
                             {eventTitle}
                           </td>
                           <td className="py-4 px-4">
                             <div className="flex flex-wrap gap-1.5 max-w-md">
+                              {(item.sessionIds || []).length === 0 && (
+                                <span className="px-2.5 py-1 bg-gray-100 text-gray-700 text-[10px] font-bold rounded-md uppercase tracking-tight">
+                                  All sessions
+                                </span>
+                              )}
                               {(item.sessionIds || []).map((s: any, idx: number) => {
                                 const sessName = typeof s === "object" ? s.name : `Session ${idx + 1}`;
                                 return (
@@ -186,7 +239,7 @@ export default function DashboardPage() {
                               })}
                             </div>
                           </td>
-                          <td className="py-4 px-4 text-gray-600 font-medium">
+                          <td className="py-4 px-4 text-gray-600 font-medium max-w-[220px] truncate" title={eventLocation}>
                             {eventLocation}
                           </td>
                           <td className="py-4 px-4 text-gray-700 font-medium">
@@ -238,12 +291,20 @@ export default function DashboardPage() {
     <div className="w-full min-h-full bg-white text-gray-900 font-sans">
       {/* Top Header Bar */}
       <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
-        <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
+        <div className="flex items-center gap-3">
+          <svg className="w-7 h-7 text-[#FF5B22] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2h-2a2 2 0 01-2-2v-2z" />
+          </svg>
+          <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
+        </div>
         <UserNavDropdown />
       </header>
 
       {/* Dashboard Main Content */}
       <div className="p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6 pb-24">
+        {metricsError && (
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-md text-xs font-medium break-words">{metricsError}</div>
+        )}
         {/* Top Section: Single Stats Card Container with dividers (Left) + Revenue Overview Chart (Right) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Metrics Single Card Container with Dividers */}
@@ -256,8 +317,8 @@ export default function DashboardPage() {
                 </svg>
               </div>
               <div>
-                <h3 className="text-2xl font-bold text-gray-900 tracking-tight">$0</h3>
-                <p className="text-xs font-medium text-gray-500 mt-0.5">Total Revenue</p>
+                <h3 className="text-2xl font-bold text-gray-900 tracking-tight">—</h3>
+                <p className="text-xs font-medium text-gray-500 mt-0.5">Total Revenue (payments not configured)</p>
               </div>
             </div>
 
@@ -269,7 +330,7 @@ export default function DashboardPage() {
                 </svg>
               </div>
               <div>
-                <h3 className="text-2xl font-bold text-gray-900 tracking-tight">{totalEvents.toLocaleString()}</h3>
+                <h3 className="text-2xl font-bold text-gray-900 tracking-tight">{loadingMetrics ? "…" : totalEvents.toLocaleString()}</h3>
                 <p className="text-xs font-medium text-gray-500 mt-0.5">Total Events</p>
               </div>
             </div>
@@ -282,7 +343,7 @@ export default function DashboardPage() {
                 </svg>
               </div>
               <div>
-                <h3 className="text-2xl font-bold text-gray-900 tracking-tight">{activeEvents.toLocaleString()}</h3>
+                <h3 className="text-2xl font-bold text-gray-900 tracking-tight">{loadingMetrics ? "…" : activeEvents.toLocaleString()}</h3>
                 <p className="text-xs font-medium text-gray-500 mt-0.5">Active Events</p>
               </div>
             </div>
@@ -295,8 +356,10 @@ export default function DashboardPage() {
                 </svg>
               </div>
               <div>
-                <h3 className="text-2xl font-bold text-gray-900 tracking-tight">0</h3>
-                <p className="text-xs font-medium text-gray-500 mt-0.5">Total Organizers</p>
+                <h3 className="text-2xl font-bold text-gray-900 tracking-tight">
+                  {loadingMetrics ? "…" : (isAdmin ? organizerCount : totalInvitees).toLocaleString()}
+                </h3>
+                <p className="text-xs font-medium text-gray-500 mt-0.5">{isAdmin ? "Total Organizers" : "Total Invitees"}</p>
               </div>
             </div>
           </div>
@@ -305,21 +368,12 @@ export default function DashboardPage() {
           <div className="lg:col-span-8 bg-white border border-gray-200 rounded-md p-6 shadow-2xs flex flex-col justify-between">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Revenue Overview</h3>
-              <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-md px-3 py-1.5 text-xs text-gray-700 font-medium">
-                <span>1/1/2026</span>
-                <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <span className="text-gray-400 font-normal mx-1">To</span>
-                <span>30/4/2026</span>
-                <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
             </div>
 
             <div className="relative h-64 w-full flex items-center justify-center border-l border-b border-gray-200 pl-8 pb-4 pt-4">
-              <p className="text-gray-400 font-medium text-sm">Revenue data coming soon</p>
+              <p className="text-gray-400 font-medium text-sm text-center px-4">
+                Revenue appears here once online payments are configured.
+              </p>
             </div>
           </div>
         </div>
@@ -355,11 +409,34 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 text-gray-800">
-                  <tr>
-                    <td colSpan={8} className="py-8 text-center text-gray-500 font-medium">
-                      No organizer data available yet
-                    </td>
-                  </tr>
+                  {loadingMetrics ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-gray-500 font-medium">Loading organizers...</td>
+                    </tr>
+                  ) : topOrganizers.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-gray-500 font-medium">
+                        No organizer data available yet
+                      </td>
+                    </tr>
+                  ) : (
+                    topOrganizers.map((org) => (
+                      <tr key={org.id} className="hover:bg-gray-50/80 transition-colors">
+                        <td className="py-4 px-4 font-semibold text-gray-900 max-w-[200px] truncate" title={org.name}>{org.name}</td>
+                        <td className="py-4 px-4 text-gray-600 max-w-[240px] truncate" title={org.email}>{org.email}</td>
+                        <td className="py-4 px-4 text-gray-600">{org.phone}</td>
+                        <td className="py-4 px-4 font-medium">{org.totalEvents}</td>
+                        <td className="py-4 px-4 text-gray-400">—</td>
+                        <td className="py-4 px-4 font-medium">{org.ongoingEvents}</td>
+                        <td className="py-4 px-4 font-medium">{org.pastEvents}</td>
+                        <td className="py-4 px-2 text-right">
+                          <Link href={`/event-organizer/${org.id}`} className="text-[#FF5B22] font-semibold hover:underline">
+                            View
+                          </Link>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

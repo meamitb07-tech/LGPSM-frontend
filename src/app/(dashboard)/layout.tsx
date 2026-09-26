@@ -5,6 +5,22 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import Sidebar from "@/components/Sidebar";
 
+// Client-side route access per role. The backend enforces authorization independently;
+// this only keeps users out of screens they cannot use.
+function canAccess(role: string | undefined, pathname: string | null): boolean {
+  const path = pathname || "";
+  const within = (p: string) => path === p || path.startsWith(p + "/");
+
+  if (role === "SYSTEM_USER") {
+    return ["/dashboard", "/settings/account", "/notification", "/notifications"].some(within);
+  }
+  if (role === "ORGANIZER") {
+    if (within("/user-management/assign")) return true;
+    return !["/user-management", "/event-organizer", "/earnings", "/settings/price-rate"].some(within);
+  }
+  return true;
+}
+
 export default function DashboardLayout({
   children,
 }: {
@@ -13,49 +29,16 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const { user, isAuthenticated, isLoading } = useAuth();
+  const allowed = !!user && canAccess(user.role, pathname);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (isLoading) return;
+    if (!isAuthenticated) {
       router.replace("/signin");
       return;
     }
-
-    if (!isLoading && isAuthenticated && user) {
-      const userRole = user.role;
-
-      // 1. SYSTEM_USER route guard: strictly allowed ONLY on /dashboard and /settings/account
-      if (userRole === "SYSTEM_USER") {
-        const allowedSystemUserPaths = ["/dashboard", "/settings/account"];
-        const isAllowed = allowedSystemUserPaths.some(
-          (p) => pathname === p || pathname?.startsWith(p + "/")
-        );
-
-        if (!isAllowed) {
-          router.replace("/dashboard");
-        }
-      }
-
-      // 2. ORGANIZER route guard: blocked from administrative-only modules
-      if (userRole === "ORGANIZER") {
-        const isAssignPath = pathname === "/user-management/assign" || pathname?.startsWith("/user-management/assign/");
-
-        if (!isAssignPath) {
-          const blockedOrganizerPaths = [
-            "/user-management",
-            "/user-management/add",
-            "/event-organizer",
-            "/earnings",
-          ];
-
-          const isBlocked = blockedOrganizerPaths.some(
-            (p) => pathname === p || pathname?.startsWith(p + "/")
-          );
-
-          if (isBlocked) {
-            router.replace("/dashboard");
-          }
-        }
-      }
+    if (user && !canAccess(user.role, pathname)) {
+      router.replace("/dashboard");
     }
   }, [isLoading, isAuthenticated, user, pathname, router]);
 
@@ -75,6 +58,15 @@ export default function DashboardLayout({
 
   if (!isAuthenticated) {
     return null;
+  }
+
+  // Do not mount (and fetch data for) a page the role cannot use while the redirect happens
+  if (!allowed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F4F5F8] text-xs font-semibold text-gray-500">
+        Redirecting...
+      </div>
+    );
   }
 
   return (

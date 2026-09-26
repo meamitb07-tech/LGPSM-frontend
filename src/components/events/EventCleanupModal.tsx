@@ -51,7 +51,6 @@ export default function EventCleanupModal({
         {/* Top Decorative Banner */}
         <div className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 text-white px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
             <div>
               <span className="text-[10px] font-bold tracking-widest uppercase text-amber-400 block">
                 Event Completed

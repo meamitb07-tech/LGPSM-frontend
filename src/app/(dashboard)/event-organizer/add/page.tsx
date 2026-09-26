@@ -14,6 +14,7 @@ export default function AddEventOrganizerPage() {
     email: "",
     phone: "",
     organizerName: "",
+    password: "",
   });
   const [isSuccess, setIsSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -46,46 +47,39 @@ export default function AddEventOrganizerPage() {
     e.preventDefault();
     setIsSubmitting(true);
     setError('');
+    setIsSuccess(false);
 
-    const newOrg = {
-      id: String(Date.now()),
-      name: formData.fullName,
-      email: formData.email,
-      phone: formData.phone,
-      status: "Active" as const,
-      logoUrl: logoFile?.url || "",
-    };
+    const res = await userService.createUser({
+      fullName: formData.fullName.trim(),
+      email: formData.email.trim(),
+      phone: formData.phone.trim() || undefined,
+      password: formData.password,
+      role: 'ORGANIZER',
+      ...(formData.organizerName.trim() ? { profile: { organizationName: formData.organizerName.trim() } } : {}),
+    });
 
-    try {
-      const existing = localStorage.getItem("app_local_organizers");
-      const list = existing ? JSON.parse(existing) : [];
-      list.unshift(newOrg);
-      localStorage.setItem("app_local_organizers", JSON.stringify(list));
-    } catch (err) { }
-
-    try {
-      await userService.createUser({
-        fullName: formData.fullName,
-        email: formData.email,
-        phone: formData.phone,
-        role: 'ORGANIZER',
-      });
-    } catch (err: any) {
-      console.warn("Backend creation fallback:", err);
-    } finally {
-      setIsSubmitting(false);
-      setIsSuccess(true);
-      setTimeout(() => {
-        router.push('/event-organizer');
-      }, 1000);
+    setIsSubmitting(false);
+    if (!res.success) {
+      setError(res.message || 'Failed to create organizer.');
+      return;
     }
+
+    setIsSuccess(true);
+    setTimeout(() => {
+      router.push('/event-organizer');
+    }, 1000);
   };
 
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-white">
         {/* Header */}
         <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
-          <h1 className="text-xl font-bold text-gray-900">Add Event Organizer</h1>
+          <div className="flex items-center gap-3">
+            <svg className="w-7 h-7 text-[#FF5B22] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h4m-4 0V11m0 0h4m-4 0H9m4 0V7m0 0h4m-4 0H9" />
+            </svg>
+            <h1 className="text-xl font-bold text-gray-900">Add Event Organizer</h1>
+          </div>
           <UserNavDropdown />
         </header>
 
@@ -142,8 +136,8 @@ export default function AddEventOrganizerPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
-              {/* Organizer Name (Spans 2 cols) */}
-              <div className="md:col-span-2 space-y-1.5">
+              {/* Organizer Name */}
+              <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-gray-800">
                   Organizer Name<span className="text-red-500">*</span>
                 </label>
@@ -153,6 +147,23 @@ export default function AddEventOrganizerPage() {
                   placeholder="Type Name"
                   value={formData.organizerName}
                   onChange={(e) => setFormData({ ...formData, organizerName: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-md text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#FF5B22] transition-colors"
+                />
+              </div>
+
+              {/* Temporary Password (the organizer signs in with this) */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-800">
+                  Temporary Password<span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                  placeholder="At least 6 characters"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-md text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#FF5B22] transition-colors"
                 />
               </div>
@@ -207,6 +218,7 @@ export default function AddEventOrganizerPage() {
                     <span className="text-[11px] text-gray-400 max-w-[200px] leading-tight">
                       Drag and drop a photo here or <span className="text-[#FF5B22] font-semibold underline">click to open file</span>
                     </span>
+                    <span className="text-[10px] text-gray-400 mt-1">Preview only - logo storage is not configured yet</span>
                   </div>
                 )}
               </div>

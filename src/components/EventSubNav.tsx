@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { sessionService } from "@/services/sessionService";
 import { inviteeService } from "@/services/inviteeService";
@@ -31,7 +31,14 @@ export default function EventSubNav({
   const [inviteesCount, setInviteesCount] = useState<number>(propInviteesCount ?? 0);
   const [assignmentsCount, setAssignmentsCount] = useState<number>(propAssignmentsCount ?? 0);
 
+  // Fallback counts live in a ref so parent re-renders do not trigger another round of requests
+  const fallbackCounts = useRef({ propSessionsCount, propInviteesCount, propAssignmentsCount });
+  useEffect(() => {
+    fallbackCounts.current = { propSessionsCount, propInviteesCount, propAssignmentsCount };
+  }, [propSessionsCount, propInviteesCount, propAssignmentsCount]);
+
   const fetchUnifiedCounts = useCallback(async () => {
+    const { propSessionsCount, propInviteesCount, propAssignmentsCount } = fallbackCounts.current;
     if (!eventId || eventId === "1" || eventId === "select") return;
 
     try {
@@ -64,7 +71,7 @@ export default function EventSubNav({
     } catch (err) {
       console.error("Error loading subnav counts from database:", err);
     }
-  }, [eventId, propSessionsCount, propInviteesCount, propAssignmentsCount]);
+  }, [eventId]);
 
   useEffect(() => {
     fetchUnifiedCounts();
@@ -88,46 +95,58 @@ export default function EventSubNav({
     <div className="flex items-center gap-2 border-b border-gray-200 pb-1 text-xs font-semibold overflow-x-auto">
       <Link
         href={`/events/${eventId}`}
-        className={`px-4 py-2 border-b-2 transition-colors shrink-0 ${
+        className={`px-4 py-2 border-b-2 transition-colors shrink-0 flex items-center gap-2 ${
           activeTab === "overview"
             ? "text-[#FF5B22] border-[#FF5B22] font-bold"
             : "text-gray-500 hover:text-gray-900 border-transparent"
         }`}
       >
-        Overview
+        <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>Overview</span>
       </Link>
 
       <Link
         href={`/events/${eventId}/sessions`}
-        className={`px-4 py-2 border-b-2 transition-colors shrink-0 ${
+        className={`px-4 py-2 border-b-2 transition-colors shrink-0 flex items-center gap-2 ${
           activeTab === "sessions"
             ? "text-[#FF5B22] border-[#FF5B22] font-bold"
             : "text-gray-500 hover:text-gray-900 border-transparent"
         }`}
       >
-        Sessions ({formatCount(sessionsCount)})
+        <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>Sessions ({formatCount(sessionsCount)})</span>
       </Link>
 
       <Link
         href={`/events/${eventId}/invitees`}
-        className={`px-4 py-2 border-b-2 transition-colors shrink-0 ${
+        className={`px-4 py-2 border-b-2 transition-colors shrink-0 flex items-center gap-2 ${
           activeTab === "invitees"
             ? "text-[#FF5B22] border-[#FF5B22] font-bold"
             : "text-gray-500 hover:text-gray-900 border-transparent"
         }`}
       >
-        Invitees List ({formatCount(inviteesCount)})
+        <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+        <span>Invitees List ({formatCount(inviteesCount)})</span>
       </Link>
 
       <Link
         href={`/events/${eventId}/assign-users`}
-        className={`px-4 py-2 border-b-2 transition-colors shrink-0 ${
+        className={`px-4 py-2 border-b-2 transition-colors shrink-0 flex items-center gap-2 ${
           activeTab === "assign-users"
             ? "text-[#FF5B22] border-[#FF5B22] font-bold"
             : "text-gray-500 hover:text-gray-900 border-transparent"
         }`}
       >
-        Assign System Users ({formatCount(assignmentsCount)})
+        <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+        <span>Assign System Users ({formatCount(assignmentsCount)})</span>
       </Link>
     </div>
   );

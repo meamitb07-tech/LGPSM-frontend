@@ -1,111 +1,125 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useAuth } from "@/context/AuthContext";
 import { EarningsRecord } from "@/types/earnings";
 import EarningsOverviewCard from "@/components/earnings/EarningsOverviewCard";
 import EarningsStatsRow from "@/components/earnings/EarningsStatsRow";
 import EarningsTable from "@/components/earnings/EarningsTable";
 import UserNavDropdown from "@/components/common/UserNavDropdown";
 import { eventService } from "@/services/eventService";
-import { userService } from "@/services/userService";
+import { reportService } from "@/services/reportService";
+import { parseEventDate } from "@/utils/eventUtils";
+
+interface EventInviteSummary {
+  id: string;
+  eventName: string;
+  organizer: string;
+  invites: number;
+  eventStart?: string;
+}
 
 export default function EarningsPage() {
-  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<"organizer" | "event">("organizer");
+  // The billing rate is not persisted by the backend yet; amounts below are estimates at this rate
   const [rate, setRate] = useState<number>(3.0);
   const [tempRate, setTempRate] = useState<number>(3.0);
   const [searchQuery, setSearchQuery] = useState("");
-  const [startDate, setStartDate] = useState("1/1/2026");
-  const [endDate, setEndDate] = useState("30/4/2026");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [hiddenIds, setHiddenIds] = useState<string[]>([]);
   const [isSavedNotice, setIsSavedNotice] = useState(false);
 
-  const [organizerRecords, setOrganizerRecords] = useState<EarningsRecord[]>([]);
-  const [eventRecords, setEventRecords] = useState<EarningsRecord[]>([]);
+  const [eventSummaries, setEventSummaries] = useState<EventInviteSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
+  // Invitations actually sent per event, read from the event reports
   useEffect(() => {
+    let cancelled = false;
     async function loadEarnings() {
       setLoading(true);
-      let events: any[] = [];
-      try {
-        const res = await eventService.getEvents();
-        if (res?.success && Array.isArray(res.data)) {
-          events = res.data;
-        }
-      } catch (e) {}
+      setLoadError(null);
+      const res = await eventService.getEvents();
+      if (cancelled) return;
+      if (!res.success || !Array.isArray(res.data)) {
+        setLoadError(res.message || "Failed to load events.");
+        setEventSummaries([]);
+        setLoading(false);
+        return;
+      }
 
-      try {
-        const local = localStorage.getItem("app_local_events");
-        if (local) {
-          const parsed = JSON.parse(local);
-          parsed.forEach((ev: any) => {
-            const id = ev.id || ev._id;
-            if (!events.some((e) => (e._id || e.id) === id)) {
-              events.push(ev);
-            }
-          });
-        }
-      } catch (e) {}
-
-      const mappedEventRecs: EarningsRecord[] = events.map((ev, idx) => {
-        const evId = ev._id || ev.id || `evt_${idx}`;
-        let inviteesCount = 0;
-        try {
-          const invData = localStorage.getItem(`app_local_invitees_${evId}`);
-          if (invData) {
-            const parsedInv = JSON.parse(invData);
-            if (Array.isArray(parsedInv)) inviteesCount = parsedInv.length;
-          }
-        } catch (e) {}
-        if (inviteesCount === 0) inviteesCount = 250;
-
-        const currentRate = rate;
-        return {
-          id: `rec_evt_${idx + 1}`,
-          organizer: ev.organizer || ev.organizerId?.fullName || "Admin",
-          eventName: ev.title || ev.eventName || "Untitled Event",
-          dateOfPayment: ev.createdAt ? new Date(ev.createdAt).toLocaleDateString() : "20/09/2026",
-          invites: inviteesCount,
-          rate: currentRate,
-          amount: inviteesCount * currentRate,
-        };
-      });
-
-      // Group by organizer for organizerRecords
-      const orgMap = new Map<string, EarningsRecord>();
-      mappedEventRecs.forEach((r) => {
-        if (orgMap.has(r.organizer)) {
-          const existing = orgMap.get(r.organizer)!;
-          existing.invites += r.invites;
-          existing.amount += r.amount;
-        } else {
-          orgMap.set(r.organizer, { ...r, id: `rec_org_${orgMap.size + 1}` });
-        }
-      });
-
-      setEventRecords(mappedEventRecs);
-      setOrganizerRecords(Array.from(orgMap.values()));
+      const events = res.data as any[];
+      const summaries = await Promise.all(
+        events.map(async (ev) => {
+          const id = ev._id || ev.id;
+          const report = await reportService.getEventReport(id);
+          return {
+            id,
+            eventName: ev.title || "Untitled Event",
+            organizer: ev.organizerId?.fullName || "—",
+            invites: report.success && report.data ? report.data.deliverySummary?.SENT ?? 0 : 0,
+            eventStart: ev.schedule?.start,
+          };
+        })
+      );
+      if (cancelled) return;
+      setEventSummaries(summaries);
       setLoading(false);
     }
 
     loadEarnings();
-  }, [rate]);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const currentRecords = activeTab === "organizer" ? organizerRecords : eventRecords;
+  const fromDate = startDate.trim() ? parseEventDate(startDate) : null;
+  const toDate = endDate.trim() ? parseEventDate(endDate) : null;
+  if (toDate) toDate.setHours(23, 59, 59, 999);
+  const inRange = (iso?: string) => {
+    if (!fromDate && !toDate) return true;
+    if (!iso) return false;
+    const d = new Date(iso);
+    return (!fromDate || d >= fromDate) && (!toDate || d <= toDate);
+  };
+
+  const eventRecords: EarningsRecord[] = eventSummaries
+    .filter((ev) => inRange(ev.eventStart))
+    .map((ev) => ({
+      id: `evt_${ev.id}`,
+      eventName: ev.eventName,
+      organizer: ev.organizer,
+      dateOfPayment: "—",
+      invites: ev.invites,
+      rate,
+      amount: ev.invites * rate,
+      eventStart: ev.eventStart,
+    }));
+
+  const organizerMap = new Map<string, EarningsRecord>();
+  eventRecords.forEach((r) => {
+    const existing = organizerMap.get(r.organizer);
+    if (existing) {
+      existing.invites += r.invites;
+      existing.amount += r.amount;
+      existing.eventName = `${existing.eventName}, ${r.eventName}`;
+    } else {
+      organizerMap.set(r.organizer, { ...r, id: `org_${r.organizer}` });
+    }
+  });
+  const organizerRecords = Array.from(organizerMap.values());
+
+  const currentRecords = (activeTab === "organizer" ? organizerRecords : eventRecords).filter(
+    (r) => !hiddenIds.includes(r.id)
+  );
+  const estimatedTotal = eventRecords.reduce((sum, r) => sum + r.amount, 0);
+  const organizersBilled = organizerRecords.filter((r) => r.invites > 0).length;
 
   const handleSaveRate = () => {
     setRate(tempRate);
     setIsSavedNotice(true);
     setTimeout(() => setIsSavedNotice(false), 2500);
-
-    setOrganizerRecords((prev) =>
-      prev.map((r) => ({ ...r, rate: tempRate, amount: r.invites * tempRate }))
-    );
-    setEventRecords((prev) =>
-      prev.map((r) => ({ ...r, rate: tempRate, amount: r.invites * tempRate }))
-    );
   };
 
   const toggleSelectAll = () => {
@@ -124,12 +138,9 @@ export default function EarningsPage() {
     }
   };
 
+  // Hides rows from this view only; nothing is deleted on the server
   const handleDeleteSelected = () => {
-    if (activeTab === "organizer") {
-      setOrganizerRecords((prev) => prev.filter((r) => !selectedIds.includes(r.id)));
-    } else {
-      setEventRecords((prev) => prev.filter((r) => !selectedIds.includes(r.id)));
-    }
+    setHiddenIds((prev) => [...prev, ...selectedIds]);
     setSelectedIds([]);
   };
 
@@ -162,7 +173,12 @@ export default function EarningsPage() {
   return (
     <div className="w-full min-h-full bg-white">
       <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
-        <h1 className="text-xl font-bold text-gray-900">Earnings</h1>
+        <div className="flex items-center gap-3">
+          <svg className="w-7 h-7 text-[#FF5B22] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+          <h1 className="text-xl font-bold text-gray-900">Earnings</h1>
+        </div>
         <UserNavDropdown />
       </header>
 
@@ -175,7 +191,16 @@ export default function EarningsPage() {
           isSavedNotice={isSavedNotice}
         />
 
-        <EarningsStatsRow />
+        <p className="text-[11px] text-gray-500 font-medium -mt-2">
+          Invite counts are the invitations actually sent for each event. Online payments and a saved billing rate are not configured yet,
+          so amounts are estimates at the rate above.
+        </p>
+
+        {loadError && (
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-md text-xs font-medium break-words">{loadError}</div>
+        )}
+
+        <EarningsStatsRow estimatedTotal={estimatedTotal} organizersBilled={organizersBilled} loading={loading} />
 
         <EarningsTable
           activeTab={activeTab}

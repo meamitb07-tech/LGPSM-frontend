@@ -10,14 +10,16 @@ export interface ApiResponse<T = any> {
 }
 
 let isRefreshing = false;
-let refreshSubscribers: ((newToken: string) => void)[] = [];
+let refreshSubscribers: ((newToken: string | null) => void)[] = [];
 
-function subscribeTokenRefresh(cb: (newToken: string) => void) {
+function subscribeTokenRefresh(cb: (newToken: string | null) => void) {
   refreshSubscribers.push(cb);
 }
 
-function onRefreshed(newToken: string) {
-  refreshSubscribers.map((cb) => cb(newToken));
+// Always settle queued requests, including when the refresh failed (null),
+// otherwise they would wait forever and leave screens stuck on a spinner.
+function onRefreshed(newToken: string | null) {
+  refreshSubscribers.forEach((cb) => cb(newToken));
   refreshSubscribers = [];
 }
 
@@ -88,9 +90,9 @@ export async function apiClient<T = any>(
         isRefreshing = true;
         const newAccessToken = await performTokenRefresh();
         isRefreshing = false;
+        onRefreshed(newAccessToken);
 
         if (newAccessToken) {
-          onRefreshed(newAccessToken);
           // Retry original request once
           headers["Authorization"] = `Bearer ${newAccessToken}`;
           response = await fetch(url, { ...config, headers });
@@ -124,6 +126,10 @@ export async function apiClient<T = any>(
 
     if (!response.ok) {
       let errorMessage = data.message || (typeof data.error === "string" ? data.error : undefined);
+
+      if (response.status === 403 && !data.message) {
+        errorMessage = "You do not have permission to perform this action.";
+      }
 
       if (!errorMessage && data.errors && typeof data.errors === "object") {
         const errorMessages: string[] = [];

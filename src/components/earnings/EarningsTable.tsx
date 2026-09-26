@@ -105,7 +105,9 @@ export default function EarningsTable({
               type="text"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-20 bg-transparent text-gray-800 focus:outline-none"
+              placeholder="DD/MM/YYYY"
+              aria-label="From date"
+              className="w-20 bg-transparent text-gray-800 placeholder-gray-400 focus:outline-none"
             />
             <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -119,7 +121,9 @@ export default function EarningsTable({
               type="text"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="w-20 bg-transparent text-gray-800 focus:outline-none"
+              placeholder="DD/MM/YYYY"
+              aria-label="To date"
+              className="w-20 bg-transparent text-gray-800 placeholder-gray-400 focus:outline-none"
             />
             <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />

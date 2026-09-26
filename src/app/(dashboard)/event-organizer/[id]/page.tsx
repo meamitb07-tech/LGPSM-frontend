@@ -8,9 +8,11 @@ import { useAuth } from "@/context/AuthContext";
 import { userService } from "@/services/userService";
 import { eventService } from "@/services/eventService";
 import { getDynamicEventStatus } from "@/utils/eventUtils";
+import { formatEventId } from "@/utils/formatId";
 
 interface EventRow {
   id: string;
+  eventId: string;
   name: string;
   organizer: string;
   createdOn: string;
@@ -32,7 +34,7 @@ interface OrganizerDetail {
 export default function OrganizerDetailsPage() {
   const params = useParams();
   const { user } = useAuth();
-  const organizerId = (params?.id as string) || "1";
+  const organizerId = (params?.id as string) || "";
 
   const [organizer, setOrganizer] = useState<OrganizerDetail | null>(null);
 
@@ -44,108 +46,68 @@ export default function OrganizerDetailsPage() {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [isDeactivating, setIsDeactivating] = useState(false);
+
   useEffect(() => {
     async function loadOrganizerAndEvents() {
       setLoading(true);
-      let foundOrg: OrganizerDetail | null = null;
+      setLoadError(null);
 
-      // 1. Fetch organizers from local storage and backend API
-      let localOrgs: OrganizerDetail[] = [];
-      try {
-        const stored = localStorage.getItem("app_local_organizers");
-        if (stored) localOrgs = JSON.parse(stored);
-      } catch (e) {}
+      // 1. Organizer account (only active organizers are returned by the backend)
+      const usersRes = await userService.getUsers("ORGANIZER");
+      if (!usersRes.success) {
+        setLoadError(usersRes.message || "Failed to load organizer.");
+        setOrganizer(null);
+        setLoading(false);
+        return;
+      }
+      const matched = (usersRes.data || []).find(
+        (u: any) => String(u._id || u.id) === String(organizerId) && u.role === "ORGANIZER"
+      ) as any;
 
-      let apiUsers: any[] = [];
-      try {
-        const res = await userService.getUsers();
-        if (res?.success && Array.isArray(res.data)) {
-          apiUsers = res.data;
-        }
-      } catch (e) {}
-
-      // Try finding by id, _id, or index
-      const matchedLocal = localOrgs.find(
-        (o) => String(o.id) === String(organizerId) || o.id === `org_${organizerId}`
-      );
-
-      const matchedApi = apiUsers.find(
-        (u) => String(u._id || u.id) === String(organizerId)
-      );
-
-      if (matchedLocal) {
-        foundOrg = {
-          id: matchedLocal.id,
-          name: matchedLocal.name,
-          email: matchedLocal.email,
-          phone: matchedLocal.phone,
-          logoUrl: matchedLocal.logoUrl,
-          status: matchedLocal.status || "Active",
-        };
-      } else if (matchedApi) {
-        foundOrg = {
-          id: matchedApi._id || matchedApi.id,
-          name: matchedApi.fullName || matchedApi.name || "Event Organizer",
-          email: matchedApi.email,
-          phone: matchedApi.phone || "+91 98765 43210",
-          logoUrl: matchedApi.avatarUrl || matchedApi.profile?.avatarUrl,
-          status: "Active",
-        };
+      if (!matched) {
+        setLoadError("Organizer not found or already deactivated.");
+        setOrganizer(null);
+        setLoading(false);
+        return;
       }
 
-      if (!foundOrg) {
-        foundOrg = {
-          id: organizerId,
-          name: "Event Organizer",
-          email: "organizer@lgpsm.com",
-          phone: "+91 98765 43210",
-          status: "Active",
-        };
-      }
-
+      const foundOrg: OrganizerDetail = {
+        id: matched._id || matched.id,
+        name: matched.fullName || matched.name || "",
+        email: matched.email || "—",
+        phone: matched.phone || "—",
+        logoUrl: matched.avatarUrl || matched.profile?.avatarUrl,
+        status: matched.isActive === false ? "Deactivate" : "Active",
+      };
       setOrganizer(foundOrg);
-      setIsDeactivated(foundOrg.status === "Deactivate" || foundOrg.status === "In Active");
+      setIsDeactivated(foundOrg.status !== "Active");
 
-      // 2. Fetch events matching this organizer
-      let allEvts: any[] = [];
-      try {
-        const res = await eventService.getEvents();
-        if (res?.success && Array.isArray(res.data)) {
-          allEvts = res.data;
-        }
-      } catch (e) {}
+      // 2. Events owned by this organizer (admin read access)
+      const evRes = await eventService.getEvents({ organizerId: foundOrg.id });
+      const rawList: any[] = evRes.success && Array.isArray(evRes.data) ? (evRes.data as any[]) : [];
+      if (!evRes.success) {
+        setLoadError(evRes.message || "Failed to load this organizer's events.");
+      }
 
-      let localEvts: any[] = [];
-      try {
-        const saved = localStorage.getItem("app_local_events");
-        if (saved) localEvts = JSON.parse(saved);
-      } catch (e) {}
-
-      const combinedMap = new Map();
-      localEvts.forEach((e) => combinedMap.set(e.id, e));
-      allEvts.forEach((e) => combinedMap.set(e._id || e.id, e));
-
-      const orgNameLower = (foundOrg?.name || "").toLowerCase();
-      const mappedEvents: EventRow[] = [];
-
-      Array.from(combinedMap.values()).forEach((ev: any, idx: number) => {
-        const evOrgName = (ev.organizer || ev.organizerId?.fullName || "").toLowerCase();
-        if (!orgNameLower || evOrgName.includes(orgNameLower) || orgNameLower.includes(evOrgName) || combinedMap.size <= 2) {
-          const start = ev.startDate || ev.schedule?.start || "25/11/2026 09:30 AM";
-          const end = ev.endDate || ev.schedule?.end || "26/11/2026 06:00 PM";
-          const status = getDynamicEventStatus(start, end, ev.status);
-
-          mappedEvents.push({
-            id: ev.eventId || ev._id || ev.id || `#EVT-${100 + idx}`,
-            name: ev.eventName || ev.title || "Untitled Event",
-            organizer: ev.organizer || ev.organizerId?.fullName || foundOrg?.name || "Organizer",
-            createdOn: ev.createdOn || (ev.createdAt ? new Date(ev.createdAt).toLocaleDateString() : "20/09/2026"),
-            category: ev.category || "Corporate",
-            startDate: start,
-            endDate: end,
-            status: status as any,
-          });
-        }
+      const mappedEvents: EventRow[] = rawList.map((ev: any) => {
+        const start = ev.schedule?.start || ev.startDate;
+        const end = ev.schedule?.end || ev.endDate;
+        const rawStatus = String(ev.status || "").toUpperCase();
+        const rawId = ev._id || ev.id;
+        return {
+          id: rawId,
+          eventId: formatEventId(ev.eventId || rawId),
+          name: ev.title || ev.eventName || "Untitled Event",
+          organizer: ev.organizerId?.fullName || foundOrg.name,
+          createdOn: ev.createdAt ? new Date(ev.createdAt).toLocaleDateString() : "—",
+          category: ev.categoryId?.name || ev.category || "—",
+          startDate: start ? new Date(start).toLocaleString() : "TBD",
+          endDate: end ? new Date(end).toLocaleString() : "TBD",
+          status: (rawStatus === "CANCELLED" ? "Cancelled" : getDynamicEventStatus(start, end, ev.status)) as any,
+        };
       });
 
       setEvents(mappedEvents);
@@ -155,38 +117,62 @@ export default function OrganizerDetailsPage() {
     loadOrganizerAndEvents();
   }, [organizerId]);
 
-  const handleDeactivate = (e: React.FormEvent) => {
+  // Deactivation is a soft delete on the backend (isActive = false); the account is kept
+  const handleDeactivate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!organizer) return;
+    setIsDeactivating(true);
+    setActionError(null);
+    const res = await userService.deleteUser(organizer.id);
+    setIsDeactivating(false);
+    if (!res.success) {
+      setActionError(res.message || "Failed to deactivate organizer.");
+      return;
+    }
     setIsDeactivated(true);
     setOrganizer((prev) => (prev ? { ...prev, status: "Deactivate" } : null));
     setIsDeactivateModalOpen(false);
-
-    try {
-      const stored = localStorage.getItem("app_local_organizers");
-      if (stored && organizer) {
-        const list = JSON.parse(stored);
-        const updated = list.map((o: any) =>
-          String(o.id) === String(organizer.id) ? { ...o, status: "Deactivate" } : o
-        );
-        localStorage.setItem("app_local_organizers", JSON.stringify(updated));
-      }
-    } catch (e) {}
   };
 
   const filteredEvents = events.filter(
     (ev) =>
       ev.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ev.eventId.toLowerCase().includes(searchQuery.toLowerCase()) ||
       ev.id.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const upcomingEventsCount = events.filter((e) => e.status === "Upcoming" || e.status === "Ongoing").length;
-  const totalEarningsAmount = events.length * 1500;
+
+  if (!loading && !organizer) {
+    return (
+      <div className="flex-1 flex flex-col min-w-0 bg-white">
+        <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
+          <h1 className="text-xl font-bold text-gray-900">Event Organizer</h1>
+          <UserNavDropdown />
+        </header>
+        <div className="flex-1 flex justify-center items-center py-24 px-6">
+          <div className="max-w-md w-full border border-gray-200 rounded-md p-8 text-center space-y-4">
+            <h2 className="text-lg font-bold text-gray-900">Organizer unavailable</h2>
+            <p className="text-xs text-gray-500 break-words">{loadError || "Organizer not found."}</p>
+            <Link href="/event-organizer" className="inline-block px-4 py-2 bg-[#FF5B22] hover:bg-[#E04B16] text-white rounded-md text-xs font-semibold">
+              Back to Organizers
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading || !organizer) {
     return (
       <div className="flex-1 flex flex-col min-w-0 bg-white">
         <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
-          <h1 className="text-xl font-bold text-gray-900">Event Organizer</h1>
+          <div className="flex items-center gap-3">
+            <svg className="w-7 h-7 text-[#FF5B22] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h4m-4 0V11m0 0h4m-4 0H9m4 0V7m0 0h4m-4 0H9" />
+            </svg>
+            <h1 className="text-xl font-bold text-gray-900">Event Organizer</h1>
+          </div>
           <UserNavDropdown />
         </header>
         <div className="flex-1 flex justify-center items-center py-24">
@@ -200,7 +186,12 @@ export default function OrganizerDetailsPage() {
     <div className="flex-1 flex flex-col min-w-0 bg-white">
         {/* Header */}
         <header className="h-20 bg-white border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
-          <h1 className="text-xl font-bold text-gray-900">Event Organizer</h1>
+          <div className="flex items-center gap-3">
+            <svg className="w-7 h-7 text-[#FF5B22] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h4m-4 0V11m0 0h4m-4 0H9m4 0V7m0 0h4m-4 0H9" />
+            </svg>
+            <h1 className="text-xl font-bold text-gray-900">Event Organizer Details</h1>
+          </div>
           <UserNavDropdown />
         </header>
 
@@ -221,9 +212,9 @@ export default function OrganizerDetailsPage() {
                   {organizer.name ? organizer.name.slice(0, 2) : "OG"}
                 </div>
               )}
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 min-w-0">
                 <div className="flex items-center gap-3 flex-wrap">
-                  <h2 className="text-xl font-bold text-gray-900">{organizer.name}</h2>
+                  <h2 className="text-xl font-bold text-gray-900 break-words min-w-0">{organizer.name}</h2>
                   <span
                     className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${isDeactivated
                         ? "bg-orange-100 text-orange-700"
@@ -234,7 +225,7 @@ export default function OrganizerDetailsPage() {
                   </span>
                 </div>
                 <div className="text-xs text-gray-500 flex items-center gap-4 flex-wrap">
-                  <span>
+                  <span className="break-all">
                     <strong className="text-gray-700">Email:</strong> {organizer.email}
                   </span>
                   <span className="text-gray-300">|</span>
@@ -249,22 +240,20 @@ export default function OrganizerDetailsPage() {
             <div className="flex items-center gap-3 shrink-0">
               <button
                 onClick={() => setIsDeactivateModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FEE8E1] hover:bg-[#FCD8CC] text-[#FF5B22] text-xs font-semibold rounded-md transition-colors cursor-pointer"
+                disabled={isDeactivated}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FEE8E1] hover:bg-[#FCD8CC] text-[#FF5B22] text-xs font-semibold rounded-md transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6h12a6 6 0 00-6-6zM21 12h-6" />
                 </svg>
-                <span>{isDeactivated ? "Reactivate" : "Deactivate"}</span>
-              </button>
-
-              <button className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-2xs">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                </svg>
-                <span>Edit</span>
+                <span>{isDeactivated ? "Deactivated" : "Deactivate"}</span>
               </button>
             </div>
           </div>
+
+          {actionError && !isDeactivateModalOpen && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-md text-xs font-medium break-words">{actionError}</div>
+          )}
 
           {/* Single Stats Container Card with Dividers */}
           <div className="bg-white border border-gray-200 rounded-md divide-y sm:divide-y-0 sm:divide-x divide-gray-200 grid grid-cols-1 sm:grid-cols-3 shadow-2xs">
@@ -298,7 +287,8 @@ export default function OrganizerDetailsPage() {
             <div className="p-5 flex items-center justify-between">
               <div>
                 <span className="text-xs font-semibold text-gray-700 block">Earnings</span>
-                <span className="text-2xl font-bold text-gray-900 mt-1 block">${totalEarningsAmount.toLocaleString()}</span>
+                <span className="text-2xl font-bold text-gray-900 mt-1 block">—</span>
+                <span className="text-[10px] text-gray-400 block">Billing is not configured yet</span>
               </div>
               <div className="w-11 h-11 rounded-full bg-blue-100 text-blue-500 flex items-center justify-center shrink-0">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -371,7 +361,7 @@ export default function OrganizerDetailsPage() {
                   )}
                   {filteredEvents.map((ev) => (
                     <tr key={ev.id} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="py-4 px-4 font-medium text-gray-900">{ev.id}</td>
+                      <td className="py-4 px-4 font-medium text-gray-900">{ev.eventId}</td>
                       <td className="py-4 px-4 font-medium text-gray-900">{ev.name}</td>
                       <td className="py-4 px-4 text-gray-600">{ev.organizer}</td>
                       <td className="py-4 px-4 text-gray-600">{ev.createdOn}</td>
@@ -468,8 +458,12 @@ export default function OrganizerDetailsPage() {
                 >
                   Cancel
                 </button>
+                {actionError && (
+                  <p className="text-xs text-rose-600 font-medium break-words flex-1">{actionError}</p>
+                )}
                 <button
                   type="submit"
+                  disabled={isDeactivating}
                   className="px-5 py-2 bg-[#FF5B22] hover:bg-[#E04B16] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-xs"
                 >
                   Deactivate
