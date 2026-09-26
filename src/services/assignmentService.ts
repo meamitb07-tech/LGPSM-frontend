@@ -112,6 +112,20 @@ export const assignmentService = {
   },
 
   /**
+   * Create the assignment, or update the sessions of the user's existing assignment for this event
+   */
+  async saveAssignment(
+    eventId: string,
+    userId: string,
+    sessionIds: string[],
+    existingAssignmentId?: string
+  ): Promise<ApiResponse<AssignmentData>> {
+    return existingAssignmentId
+      ? this.updateAssignment(existingAssignmentId, { sessionIds })
+      : this.createAssignment(eventId, { userId, sessionIds });
+  },
+
+  /**
    * Delete assignment (unassign)
    * DELETE /api/v1/assignments/:assignmentId
    */

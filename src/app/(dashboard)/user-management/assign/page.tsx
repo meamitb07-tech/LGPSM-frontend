@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { userService } from "@/services/userService";
 import { eventService } from "@/services/eventService";
-import { sessionService } from "@/services/sessionService";
+import { useEventSessions } from "@/hooks/useEventSessions";
+import SessionScopePicker from "@/components/common/SessionScopePicker";
 import { assignmentService, AssignmentData } from "@/services/assignmentService";
 import UserNavDropdown from "@/components/common/UserNavDropdown";
 import { useAlert } from "@/context/AlertContext";
@@ -80,8 +81,9 @@ export default function AssignedSystemUsersPage() {
   const [addUserData, setAddUserData] = useState({ userName: "", contactNo: "", email: "", password: "" });
   const [eventsList, setEventsList] = useState<{ id: string; title: string }[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
-  const [eventSessionsList, setEventSessionsList] = useState<{ id: string; name: string }[]>([]);
-  const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
+  // null = all sessions of the selected event
+  const [sessionScope, setSessionScope] = useState<string[] | null>(null);
+  const { sessions: eventSessionsList, loading: loadingSessions, error: sessionsError } = useEventSessions(selectedEventId);
   const [submittingAssign, setSubmittingAssign] = useState(false);
   const [submittingUser, setSubmittingUser] = useState(false);
 
@@ -175,37 +177,6 @@ export default function AssignedSystemUsersPage() {
     loadData();
   }, []);
 
-  // Fetch sessions when selected event changes in Assign modal
-  useEffect(() => {
-    if (!selectedEventId) return;
-
-    async function loadSessions() {
-      try {
-        const res = await sessionService.getSessions(selectedEventId);
-        if (res.success && Array.isArray(res.data)) {
-          const mapped = res.data.map((s: any) => ({
-            id: s._id || s.id,
-            name: s.name || s.title || "Session",
-          }));
-          setEventSessionsList(mapped);
-          if (mapped.length > 0) {
-            setSelectedSessionIds([mapped[0].id]);
-          } else {
-            setSelectedSessionIds([]);
-          }
-        } else {
-          setEventSessionsList([]);
-          setSelectedSessionIds([]);
-        }
-      } catch (err) {
-        setEventSessionsList([]);
-        setSelectedSessionIds([]);
-      }
-    }
-
-    loadSessions();
-  }, [selectedEventId]);
-
   // Handle adding new SYSTEM_USER account via backend API
   const handleAddUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -288,6 +259,10 @@ export default function AssignedSystemUsersPage() {
       showAlert("Please select at least one system user and an event.", "warning");
       return;
     }
+    if (sessionScope !== null && sessionScope.length === 0) {
+      showAlert("Select at least one session, or choose \"All sessions\".", "warning");
+      return;
+    }
 
     try {
       setSubmittingAssign(true);
@@ -296,10 +271,10 @@ export default function AssignedSystemUsersPage() {
       const errorMessages: string[] = [];
 
       for (const targetUserId of selectedIds) {
-        const res = await assignmentService.createAssignment(selectedEventId, {
-          userId: targetUserId,
-          sessionIds: selectedSessionIds,
-        });
+        const existing = users
+          .find((u) => u.id === targetUserId)
+          ?.assignments.find((a) => a.eventId === selectedEventId);
+        const res = await assignmentService.saveAssignment(selectedEventId, targetUserId, sessionScope ?? [], existing?.assignmentId);
 
         if (!res.success) {
           errorMessages.push(res.message || "Assignment failed.");
@@ -884,7 +859,10 @@ export default function AssignedSystemUsersPage() {
                 </label>
                 <select
                   value={selectedEventId}
-                  onChange={(e) => setSelectedEventId(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedEventId(e.target.value);
+                    setSessionScope(null);
+                  }}
                   className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-md text-xs text-gray-800 focus:outline-none focus:border-[#FF5B22] cursor-pointer"
                 >
                   {eventsList.map((evt) => (
@@ -895,34 +873,13 @@ export default function AssignedSystemUsersPage() {
                 </select>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-800">
-                  Sessions<span className="text-[#FF5B22]">*</span>
-                </label>
-                {eventSessionsList.length > 0 ? (
-                  <div className="space-y-2 border border-gray-200 rounded-md p-3 max-h-36 overflow-y-auto">
-                    {eventSessionsList.map((s) => (
-                      <label key={s.id} className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={selectedSessionIds.includes(s.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedSessionIds([...selectedSessionIds, s.id]);
-                            } else {
-                              setSelectedSessionIds(selectedSessionIds.filter((id) => id !== s.id));
-                            }
-                          }}
-                          className="rounded border-gray-300 text-[#FF5B22] focus:ring-[#FF5B22]"
-                        />
-                        <span>{s.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-400 italic">No sessions found for this event.</p>
-                )}
-              </div>
+              <SessionScopePicker
+                sessions={eventSessionsList}
+                loading={loadingSessions}
+                error={sessionsError}
+                value={sessionScope}
+                onChange={setSessionScope}
+              />
 
               <div className="pt-2 pb-6 flex items-center justify-end gap-3">
                 <button

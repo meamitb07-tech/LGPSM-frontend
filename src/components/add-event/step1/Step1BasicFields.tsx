@@ -7,6 +7,7 @@ interface Step1BasicFieldsProps {
   setTitle: (val: string) => void;
   description: string;
   setDescription: (val: string) => void;
+  titleError?: string;
 }
 
 export default function Step1BasicFields({
@@ -14,6 +15,7 @@ export default function Step1BasicFields({
   setTitle,
   description,
   setDescription,
+  titleError,
 }: Step1BasicFieldsProps) {
   const TITLE_MIN_REQUIRED = 10;
   const DESC_MIN_REQUIRED = 10;
@@ -46,9 +48,12 @@ export default function Step1BasicFields({
           required
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+          maxLength={100}
           placeholder="Sharmistha Birthday Event 2026"
-          className="w-full px-3.5 py-2.5 bg-white border border-gray-200/90 rounded-md text-gray-900 placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-[#FF5B22] font-medium"
+          aria-invalid={!!titleError}
+          className={`w-full px-3.5 py-2.5 bg-white border rounded-md text-gray-900 placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-[#FF5B22] font-medium ${titleError ? "border-rose-400" : "border-gray-200/90"}`}
         />
+        {titleError && <p className="mt-1 text-[11px] font-medium text-rose-600">{titleError}</p>}
       </div>
 
       {/* Description Field */}

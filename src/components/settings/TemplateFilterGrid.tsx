@@ -9,7 +9,8 @@ interface TemplateFilterGridProps {
   templates: TemplateItem[];
   categories: TemplateCategory[];
   subcategories: TemplateSubcategory[];
-  onEditTemplate: (template: TemplateItem) => void;
+  // Omitted for read-only viewers (template management is admin-only)
+  onEditTemplate?: (template: TemplateItem) => void;
 }
 
 export default function TemplateFilterGrid({

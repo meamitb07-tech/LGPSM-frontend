@@ -2,50 +2,27 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { eventService } from "@/services/eventService";
-import { sessionService, parseCustomDateTime } from "@/services/sessionService";
+import { sessionService } from "@/services/sessionService";
+import { formatDateTime, formatTime } from "@/utils/dateTime";
 import { inviteeService } from "@/services/inviteeService";
 import { assignmentService } from "@/services/assignmentService";
+import { reportService, EventReportData } from "@/services/reportService";
+import { auditLogService, AuditLogItem } from "@/services/auditLogService";
 import EventSubNav from "@/components/EventSubNav";
 import UserNavDropdown from "@/components/common/UserNavDropdown";
 import EventCleanupModal from "@/components/events/EventCleanupModal";
 import { getDynamicEventStatus } from "@/utils/eventUtils";
+import { templatePreviewUrl } from "@/components/add-event/eventDraft";
 
-function formatSessionDateTime(session: any, eventData?: any): string {
-  if (!session) return "N/A";
-
-  const rawStart = session.schedule?.start || session.schedule?.startTime || session.startTime || session.startDate || session.date;
-  const rawEnd = session.schedule?.end || session.schedule?.endTime || session.endTime || session.endDate;
-
-  if (rawStart) {
-    const startDate = parseCustomDateTime(rawStart);
-    if (!isNaN(startDate.getTime())) {
-      const formattedDate = startDate.toLocaleDateString([], { month: "numeric", day: "numeric", year: "numeric" });
-      const formattedTime = startDate.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true });
-
-      if (rawEnd) {
-        const endDate = parseCustomDateTime(rawEnd);
-        if (!isNaN(endDate.getTime())) {
-          const endTimeStr = endDate.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true });
-          return `${formattedDate}, ${formattedTime} - ${endTimeStr}`;
-        }
-      }
-      return `${formattedDate}, ${formattedTime}`;
-    }
-  }
-
-  if (session.date || session.time) {
-    return `${session.date || ""} ${session.time || ""}`.trim();
-  }
-
-  if (eventData?.startDate) {
-    return eventData.startDate;
-  }
-
-  return "N/A";
+function formatSessionDateTime(session: any): string {
+  const start = session?.schedule?.start;
+  const end = session?.schedule?.end;
+  if (!start) return "N/A";
+  const startText = formatDateTime(start, "N/A");
+  return end ? `${startText} - ${formatTime(end)}` : startText;
 }
 
 function GuestLogsDonutChart({ invitees }: { invitees: any[] }) {
@@ -58,11 +35,10 @@ function GuestLogsDonutChart({ invitees }: { invitees: any[] }) {
   invitees.forEach((inv) => {
     const rsvp = (inv.rsvpStatus || "").toUpperCase();
     const reg = (inv.registrationStatus || "").toLowerCase();
-    const invStat = (inv.invitationStatus || "").toUpperCase();
 
     if (rsvp === "ACCEPTED" || rsvp === "CONFIRMED" || reg === "confirmed") {
       accepted++;
-    } else if (rsvp === "DECLINED" || invStat === "FAILED") {
+    } else if (rsvp === "DECLINED") {
       declined++;
     } else {
       pending++;
@@ -175,7 +151,10 @@ export default function EventDetailsDashboardPage() {
   const [assignments, setAssignments] = useState<any[]>([]);
 
   const [eventStatus, setEventStatus] = useState<"Invitation not send" | "Upcoming" | "Ongoing" | "Completed">("Upcoming");
-  const [selectedSessionFilter, setSelectedSessionFilter] = useState("Entry Session");
+  // "All" or a session id
+  const [selectedSessionFilter, setSelectedSessionFilter] = useState("All");
+  const [eventReport, setEventReport] = useState<EventReportData | null>(null);
+  const [accessLogs, setAccessLogs] = useState<AuditLogItem[]>([]);
 
   // Cleanup Modal State
   const [isCleanupModalOpen, setIsCleanupModalOpen] = useState<boolean>(false);
@@ -190,12 +169,16 @@ export default function EventDetailsDashboardPage() {
     let assignmentsList: any[] = [];
 
     try {
-      const [eventRes, sessionsRes, inviteesRes, assignmentsRes] = await Promise.all([
+      const [eventRes, sessionsRes, inviteesRes, assignmentsRes, reportRes, auditRes] = await Promise.all([
         eventService.getEvent(eventId),
         sessionService.getSessions(eventId),
         inviteeService.getInvitees(eventId),
         assignmentService.getEventAssignments(eventId),
+        reportService.getEventReport(eventId),
+        auditLogService.getAuditLogs({ eventId, limit: 10 }),
       ]);
+      setEventReport(reportRes.success && reportRes.data ? reportRes.data : null);
+      setAccessLogs(auditRes.success && Array.isArray(auditRes.data) ? auditRes.data : []);
 
       if (!eventRes?.success) {
         setLoadError(eventRes?.message || "Event not found or you do not have access to it.");
@@ -215,8 +198,8 @@ export default function EventDetailsDashboardPage() {
             organizerId: { fullName: raw.organizerId?.fullName || raw.organizer || user?.fullName || "" },
             startRaw: startVal || null,
             endRaw: endVal || null,
-            startDate: startVal ? new Date(startVal).toLocaleString() : "TBD",
-            endDate: endVal ? new Date(endVal).toLocaleString() : "TBD",
+            startDate: formatDateTime(startVal, "TBD"),
+            endDate: formatDateTime(endVal, "TBD"),
             status: raw.status || "Upcoming",
             venue: locVal || "",
             operationalDataCleared: raw.operationalDataCleared ?? false,
@@ -498,7 +481,7 @@ export default function EventDetailsDashboardPage() {
                             <td className="py-3 pr-4 font-bold text-gray-900">{index + 1}</td>
                             <td className="py-3 pr-6 font-semibold text-gray-900">{session.name || session.title || "Unnamed Session"}</td>
                             <td className="py-3 pr-6 text-gray-600">
-                              {formatSessionDateTime(session, eventData)}
+                              {formatSessionDateTime(session)}
                             </td>
                             <td className="py-3 text-right text-gray-900 font-semibold pr-6">
                               {invitees.length > 0 ? invitees.length : (session.invitesCount ?? session.maxAttendees ?? 0)}
@@ -533,45 +516,31 @@ export default function EventDetailsDashboardPage() {
               <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex flex-col items-center justify-center text-center">
                 <div className="w-full h-80 rounded-lg overflow-hidden relative shadow-md bg-slate-950 flex flex-col justify-between p-4 text-white">
                   {(() => {
-                    const templateImg =
-                      (typeof eventData?.templateId === "object" ? (eventData?.templateId as any)?.imageUrl || (eventData?.templateId as any)?.previewUrl || (eventData?.templateId as any)?.url : null) ||
-                      (typeof eventData?.templateId === "string" && (eventData.templateId.startsWith("http") || eventData.templateId.startsWith("/")) ? eventData.templateId : null) ||
-                      (eventData as any)?.templateUrl ||
-                      (eventData as any)?.cardBgImage ||
-                      null;
-
-                    if (templateImg) {
-                      return (
-                        <Image
-                          src={templateImg}
-                          alt={eventData?.title || "Event Invitation Card"}
-                          fill
-                          priority
-                          sizes="400px"
-                          className="object-cover object-center rounded-lg"
-                        />
-                      );
-                    }
-
+                    const templateObj = eventData?.templateId && typeof eventData.templateId === "object" ? eventData.templateId : null;
+                    const templateImg = templatePreviewUrl(templateObj?.previewImageKey);
                     return (
                       <div className="relative z-10 flex flex-col justify-between h-full w-full select-none">
+                        {templateImg && (
+                          // Template previews can be hosted anywhere, so a plain img is used
+                          <img src={templateImg} alt="" className="absolute inset-0 -z-10 w-full h-full object-cover opacity-25 rounded-lg" />
+                        )}
                         <div className="flex items-center justify-between border-b border-white/20 pb-2">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF5B22] bg-white/90 px-2.5 py-0.5 rounded-full shadow-xs">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF5B22] bg-white/90 px-2.5 py-0.5 rounded-full shadow-xs max-w-[50%] truncate">
                             {eventData?.category || "Official Pass"}
                           </span>
-                          <span className="text-[10px] text-gray-300 font-semibold">
-                            {eventData?.isPublic ? "Public Event" : "Exclusive Pass"}
+                          <span className="text-[10px] text-gray-300 font-semibold truncate max-w-[50%]" title={templateObj?.name}>
+                            {templateObj ? `Template: ${templateObj.name}` : "No template selected"}
                           </span>
                         </div>
 
                         <div className="my-auto py-3">
                           <p className="text-[10px] font-bold text-[#FF5B22] uppercase tracking-widest">INVITATION PASS</p>
-                          <h4 className="font-extrabold text-base text-white mt-1 leading-tight">{eventData?.title}</h4>
+                          <h4 className="font-extrabold text-base text-white mt-1 leading-tight break-words line-clamp-3">{eventData?.title}</h4>
                           <p className="text-xs text-gray-300 font-medium mt-1">
                             Host: <span className="text-white font-bold">{eventData?.organizerId?.fullName || eventData?.organizer || user?.fullName || "Organizer"}</span>
                           </p>
                           <div className="mt-3 inline-block bg-white/10 backdrop-blur-xs px-3 py-1 rounded-md text-xs font-semibold text-white border border-white/20">
-                            {eventData?.startRaw ? new Date(eventData.startRaw).toLocaleString() : "Date TBD"}
+                            {formatDateTime(eventData?.startRaw, "Date TBD")}
                           </div>
                         </div>
 
@@ -586,15 +555,15 @@ export default function EventDetailsDashboardPage() {
             </div>
 
             {/* Send Invitation Button */}
-            <button
-              type="button"
+            <Link
+              href={`/events/${eventId}/invitees`}
               className="w-full mt-4 py-2.5 bg-[#FF5B22] hover:bg-[#E04B16] text-white font-semibold text-xs rounded-md transition-colors shadow-2xs flex items-center justify-center gap-2 cursor-pointer"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
               </svg>
               <span>Send Invitation</span>
-            </button>
+            </Link>
           </div>
         </div>
 
@@ -611,7 +580,7 @@ export default function EventDetailsDashboardPage() {
               >
                 <option value="All">All Sessions</option>
                 {sessions.map((s, idx) => (
-                  <option key={s._id || idx} value={s.name || s._id}>{s.name || `Session ${idx + 1}`}</option>
+                  <option key={s._id || idx} value={s._id}>{s.name || `Session ${idx + 1}`}</option>
                 ))}
               </select>
             </div>
@@ -622,9 +591,38 @@ export default function EventDetailsDashboardPage() {
             <div className="lg:col-span-5 border border-gray-200 rounded-md p-5 bg-white space-y-4">
               <h4 className="text-xs font-semibold text-gray-800">Session Health Overview Panel</h4>
 
-              <div className="flex items-center justify-center py-6 text-sm text-gray-500">
-                {eventData?.operationalDataCleared ? "Operational data cleared" : "No data available"}
-              </div>
+              {(() => {
+                const rows = (eventReport?.sessionReports || []).filter(
+                  (r) => selectedSessionFilter === "All" || String(r.sessionId) === selectedSessionFilter
+                );
+                if (rows.length === 0) {
+                  return (
+                    <div className="flex items-center justify-center py-6 text-sm text-gray-500">
+                      {eventData?.operationalDataCleared ? "Operational data cleared" : "No sessions to report yet"}
+                    </div>
+                  );
+                }
+                return (
+                  <ul className="space-y-3">
+                    {rows.map((r) => {
+                      const invited = r.invitedCount ?? 0;
+                      const attended = r.attendeeCount ?? r.checkInCount ?? 0;
+                      const pct = invited > 0 ? Math.min(100, Math.round((attended / invited) * 100)) : 0;
+                      return (
+                        <li key={String(r.sessionId)} className="space-y-1">
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="font-semibold text-gray-800 truncate" title={r.name}>{r.name}</span>
+                            <span className="text-gray-500 shrink-0">{attended} / {invited} checked in</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-gray-100 overflow-hidden" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+                            <div className="h-full bg-[#FF5B22] rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                );
+              })()}
             </div>
 
             {/* Access Logs (7 cols) */}
@@ -641,11 +639,21 @@ export default function EventDetailsDashboardPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 text-gray-800">
-                    <tr>
-                      <td colSpan={3} className="py-6 text-center text-gray-500 text-xs">
-                        No access logs available for this session yet.
-                      </td>
-                    </tr>
+                    {accessLogs.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="py-6 text-center text-gray-500 text-xs">
+                          No recorded activity for this event yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      accessLogs.map((log) => (
+                        <tr key={log._id}>
+                          <td className="py-2 px-3">{log.actorType === "SYSTEM_USER" ? "System User" : log.actorType === "ORGANIZER" ? "Organizer" : "Admin"}</td>
+                          <td className="py-2 px-3 text-gray-600">{formatDateTime(log.createdAt)}</td>
+                          <td className="py-2 px-3 max-w-[240px] truncate" title={log.action}>{log.action}</td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

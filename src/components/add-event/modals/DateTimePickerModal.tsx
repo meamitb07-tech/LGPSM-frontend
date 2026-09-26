@@ -6,196 +6,44 @@ import { gsap } from "gsap";
 interface DateTimePickerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (dateTimeString: string) => void;
-  initialValue?: string;
+  // Receives the chosen instant as an ISO string
+  onSave: (iso: string) => void;
+  // Current value (ISO); the picker opens on it, or on "now" when empty
+  value?: string | null;
+  title?: string;
 }
 
-const HOURS = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"];
-const MINUTES = Array.from({ length: 60 }, (_, i) => (i < 10 ? `0${i}` : `${i}`));
-const AMPM = ["AM", "PM"];
 const MONTH_NAMES = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
-
-interface WheelColumnProps {
-  items: string[];
-  selectedIndex: number;
-  onChange: (index: number) => void;
-}
-
-function WheelColumn({ items, selectedIndex, onChange }: WheelColumnProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const isDraggingRef = useRef(false);
-  const isProgrammaticRef = useRef(false);
-  const startYRef = useRef(0);
-  const startScrollTopRef = useRef(0);
-  const ITEM_HEIGHT = 40;
-
-  useEffect(() => {
-    if (containerRef.current) {
-      const targetScroll = selectedIndex * ITEM_HEIGHT;
-      isProgrammaticRef.current = true;
-      containerRef.current.scrollTop = targetScroll;
-      const timer = setTimeout(() => {
-        isProgrammaticRef.current = false;
-      }, 150);
-      return () => clearTimeout(timer);
-    }
-  }, [selectedIndex]);
-
-  const handleScroll = () => {
-    if (!containerRef.current || isProgrammaticRef.current) return;
-    const scrollTop = containerRef.current.scrollTop;
-    const index = Math.round(scrollTop / ITEM_HEIGHT);
-    if (index >= 0 && index < items.length && index !== selectedIndex) {
-      onChange(index);
-    }
-  };
-
-  const handleWheel = (e: React.WheelEvent) => {
-    e.stopPropagation();
-    if (!containerRef.current) return;
-    containerRef.current.scrollTop += e.deltaY;
-  };
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    isDraggingRef.current = true;
-    startYRef.current = e.clientY;
-    if (containerRef.current) {
-      startScrollTopRef.current = containerRef.current.scrollTop;
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDraggingRef.current || !containerRef.current) return;
-    const deltaY = e.clientY - startYRef.current;
-    containerRef.current.scrollTop = startScrollTopRef.current - deltaY;
-  };
-
-  const handleMouseUp = () => {
-    isDraggingRef.current = false;
-  };
-
-  return (
-    <div
-      ref={containerRef}
-      onScroll={handleScroll}
-      onWheel={handleWheel}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      className="h-40 overflow-y-auto overscroll-contain snap-y snap-mandatory relative z-10 cursor-grab active:cursor-grabbing select-none no-scrollbar w-full"
-      style={{
-        scrollbarWidth: "none",
-        msOverflowStyle: "none",
-      }}
-    >
-      <div style={{ height: 60 }} className="shrink-0 pointer-events-none" />
-
-      {items.map((item, idx) => {
-        const isSelected = idx === selectedIndex;
-        return (
-          <div
-            key={idx}
-            onClick={() => {
-              onChange(idx);
-              if (containerRef.current) {
-                containerRef.current.scrollTo({
-                  top: idx * ITEM_HEIGHT,
-                  behavior: "smooth",
-                });
-              }
-            }}
-            style={{ height: ITEM_HEIGHT }}
-            className={`snap-center flex items-center justify-center transition-all text-center cursor-pointer ${
-              isSelected
-                ? "text-base font-bold text-gray-900 scale-105"
-                : "text-xs font-semibold text-gray-300 hover:text-gray-500"
-            }`}
-          >
-            {item}
-          </div>
-        );
-      })}
-
-      <div style={{ height: 60 }} className="shrink-0 pointer-events-none" />
-    </div>
-  );
-}
 
 export default function DateTimePickerModal({
   isOpen,
   onClose,
   onSave,
-  initialValue,
+  value,
+  title,
 }: DateTimePickerModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
 
-  const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
-  const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth()); // 0-indexed
-  const [selectedDay, setSelectedDay] = useState(() => new Date().getDate());
-  const [selectedHourIndex, setSelectedHourIndex] = useState(() => {
-    let h = new Date().getHours() % 12;
-    h = h ? h : 12;
-    const hIdx = HOURS.findIndex((item) => parseInt(item, 10) === h);
-    return hIdx !== -1 ? hIdx : 8;
+  // The parent remounts the picker (via key) each time it opens, so state starts from the current value
+  const initial = (() => {
+    const parsed = value ? new Date(value) : null;
+    return parsed && !isNaN(parsed.getTime()) ? parsed : new Date();
+  })();
+
+  const [currentYear, setCurrentYear] = useState(() => initial.getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(() => initial.getMonth()); // 0-indexed
+  const [selectedDay, setSelectedDay] = useState(() => initial.getDate());
+
+  // Time as "HH:MM" in 24-hour format — native <input type="time"> is the most reliable way to capture this
+  const [timeValue, setTimeValue] = useState<string>(() => {
+    const h = initial.getHours().toString().padStart(2, "0");
+    const m = initial.getMinutes().toString().padStart(2, "0");
+    return `${h}:${m}`;
   });
-  const [selectedMinIndex, setSelectedMinIndex] = useState(() => {
-    const m = new Date().getMinutes();
-    const mIdx = MINUTES.findIndex((item) => parseInt(item, 10) === m);
-    return mIdx !== -1 ? mIdx : 0;
-  });
-  const [selectedAmpmIndex, setSelectedAmpmIndex] = useState(() => (new Date().getHours() >= 12 ? 1 : 0));
-
-  useEffect(() => {
-    if (initialValue) {
-      const parts = initialValue.trim().split(" ");
-      if (parts.length >= 3) {
-        const dateParts = parts[0].split("/");
-        if (dateParts.length >= 3) {
-          const parsedDay = parseInt(dateParts[0], 10);
-          const parsedMonth = parseInt(dateParts[1], 10) - 1;
-          let parsedYear = parseInt(dateParts[2], 10);
-          if (parsedYear < 100) parsedYear += 2000;
-
-          if (!isNaN(parsedDay) && parsedDay >= 1 && parsedDay <= 31) setSelectedDay(parsedDay);
-          if (!isNaN(parsedMonth) && parsedMonth >= 0 && parsedMonth < 12) setCurrentMonth(parsedMonth);
-          if (!isNaN(parsedYear)) setCurrentYear(parsedYear);
-        }
-
-        const timePart = parts[1].replace(".", ":");
-        const [h, m] = timePart.split(":");
-
-        const hIdx = HOURS.findIndex((item) => parseInt(item, 10) === parseInt(h, 10));
-        if (hIdx !== -1) setSelectedHourIndex(hIdx);
-
-        const mIdx = MINUTES.findIndex((item) => parseInt(item, 10) === parseInt(m, 10));
-        if (mIdx !== -1) setSelectedMinIndex(mIdx);
-
-        const ampm = parts[2].toUpperCase();
-        const aIdx = AMPM.findIndex((item) => item === ampm);
-        if (aIdx !== -1) setSelectedAmpmIndex(aIdx);
-      }
-    } else {
-      const now = new Date();
-      setSelectedDay(now.getDate());
-      setCurrentMonth(now.getMonth());
-      setCurrentYear(now.getFullYear());
-
-      let h = now.getHours() % 12;
-      h = h ? h : 12;
-      const hIdx = HOURS.findIndex((item) => parseInt(item, 10) === h);
-      if (hIdx !== -1) setSelectedHourIndex(hIdx);
-
-      const mIdx = MINUTES.findIndex((item) => parseInt(item, 10) === now.getMinutes());
-      if (mIdx !== -1) setSelectedMinIndex(mIdx);
-
-      setSelectedAmpmIndex(now.getHours() >= 12 ? 1 : 0);
-    }
-  }, [isOpen, initialValue]);
 
   useEffect(() => {
     if (isOpen && overlayRef.current && modalRef.current) {
@@ -237,20 +85,27 @@ export default function DateTimePickerModal({
   };
 
   const handleSave = () => {
-    const dayStr = selectedDay < 10 ? `0${selectedDay}` : `${selectedDay}`;
-    const monthNum = currentMonth + 1;
-    const monthStr = monthNum < 10 ? `0${monthNum}` : `${monthNum}`;
-    const yearShortStr = String(currentYear).slice(-2);
-    const hourStr = HOURS[selectedHourIndex];
-    const minStr = MINUTES[selectedMinIndex];
-    const ampmStr = AMPM[selectedAmpmIndex];
-    const result = `${dayStr}/${monthStr}/${yearShortStr} ${hourStr}.${minStr} ${ampmStr}`;
-    onSave(result);
+    // Parse time from "HH:MM"
+    const [hourStr, minStr] = timeValue.split(":");
+    const hour = parseInt(hourStr, 10) || 0;
+    const minute = parseInt(minStr, 10) || 0;
+    // Clamp day in case the month changed after picking e.g. the 31st
+    const day = Math.min(selectedDay, daysInMonth);
+    const chosen = new Date(currentYear, currentMonth, day, hour, minute, 0, 0);
+    onSave(chosen.toISOString());
     onClose();
   };
 
+  // Format time for display (12-hour AM/PM)
+  const displayTime = (() => {
+    const [h, m] = timeValue.split(":").map(Number);
+    const ampm = h >= 12 ? "PM" : "AM";
+    const h12 = (h % 12 || 12).toString().padStart(2, "0");
+    return `${h12}:${(m || 0).toString().padStart(2, "0")} ${ampm}`;
+  })();
+
   // Build grid items
-  const calendarCells = [];
+  const calendarCells: React.ReactNode[] = [];
 
   // 1. Previous month padding
   for (let i = firstDayOfWeek - 1; i >= 0; i--) {
@@ -264,7 +119,7 @@ export default function DateTimePickerModal({
 
   // 2. Current month days (ALL CLICKABLE)
   for (let day = 1; day <= daysInMonth; day++) {
-    const isSelected = day === selectedDay;
+    const isSelected = day === Math.min(selectedDay, daysInMonth);
     const dayDisplay = day < 10 ? `0${day}` : `${day}`;
     calendarCells.push(
       <button
@@ -304,7 +159,7 @@ export default function DateTimePickerModal({
       >
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h2 className="text-base font-bold text-gray-900">Select Date & Time</h2>
+          <h2 className="text-base font-bold text-gray-900">{title || "Select Date & Time"}</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-md cursor-pointer"
@@ -315,8 +170,8 @@ export default function DateTimePickerModal({
           </button>
         </div>
 
-        {/* Content Body: Calendar (Left) + Wheel Picker (Right) */}
-        <div className="p-6 grid grid-cols-1 sm:grid-cols-12 gap-6 items-center">
+        {/* Content Body: Calendar (Left) + Time Picker (Right) */}
+        <div className="p-6 grid grid-cols-1 sm:grid-cols-12 gap-6 items-start">
           {/* Left Side: Calendar Grid */}
           <div className="sm:col-span-7 bg-[#F4F5F8] p-4 rounded-md border border-gray-200">
             {/* Header: Chevrons + Month */}
@@ -357,28 +212,61 @@ export default function DateTimePickerModal({
             </div>
           </div>
 
-          {/* Right Side: Wheel Scroll Picker */}
-          <div className="sm:col-span-5 relative flex items-center justify-center py-2 h-44">
-            {/* Gray Highlight Active Row Bar spanning horizontally in background */}
-            <div className="absolute inset-x-0 h-10 bg-[#E8E8E8] rounded-lg pointer-events-none z-0 top-1/2 -translate-y-1/2" />
+          {/* Right Side: Time Picker */}
+          <div className="sm:col-span-5 flex flex-col gap-4">
+            {/* Selected date summary */}
+            <div className="bg-[#FF5B22]/5 border border-[#FF5B22]/20 rounded-lg p-3 text-center">
+              <p className="text-[11px] text-gray-500 font-medium mb-0.5">Selected Date</p>
+              <p className="text-sm font-bold text-gray-900">
+                {Math.min(selectedDay, daysInMonth).toString().padStart(2, "0")}{" "}
+                {MONTH_NAMES[currentMonth]} {currentYear}
+              </p>
+            </div>
 
-            {/* 3 Wheel Columns: Hours, Minutes, AM/PM */}
-            <div className="relative z-10 grid grid-cols-3 gap-2 text-center w-full px-1 items-center">
-              <WheelColumn
-                items={HOURS}
-                selectedIndex={selectedHourIndex}
-                onChange={setSelectedHourIndex}
-              />
-              <WheelColumn
-                items={MINUTES}
-                selectedIndex={selectedMinIndex}
-                onChange={setSelectedMinIndex}
-              />
-              <WheelColumn
-                items={AMPM}
-                selectedIndex={selectedAmpmIndex}
-                onChange={setSelectedAmpmIndex}
-              />
+            {/* Time input */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-gray-700">
+                Time
+              </label>
+              <div className="relative">
+                <input
+                  type="time"
+                  value={timeValue}
+                  onChange={(e) => setTimeValue(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-white border-2 border-[#FF5B22]/40 focus:border-[#FF5B22] rounded-lg text-sm font-bold text-gray-900 text-center outline-none transition-colors cursor-pointer"
+                  style={{ colorScheme: "light" }}
+                />
+              </div>
+              <p className="text-center text-xs font-semibold text-gray-500">
+                {displayTime}
+              </p>
+            </div>
+
+            {/* Quick time presets */}
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-semibold text-gray-500">Quick Select</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {["09:00", "12:00", "15:00", "18:00", "20:00", "23:00"].map((t) => {
+                  const [h, m] = t.split(":").map(Number);
+                  const ampm = h >= 12 ? "PM" : "AM";
+                  const h12 = (h % 12 || 12).toString().padStart(2, "0");
+                  const label = `${h12}:${m.toString().padStart(2, "0")} ${ampm}`;
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setTimeValue(t)}
+                      className={`py-1.5 px-2 text-[11px] font-bold rounded-md border transition-all cursor-pointer ${
+                        timeValue === t
+                          ? "bg-[#FF5B22] text-white border-[#FF5B22]"
+                          : "bg-white text-gray-700 border-gray-200 hover:border-[#FF5B22] hover:text-[#FF5B22]"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>

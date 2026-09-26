@@ -8,9 +8,11 @@ import { useAuth } from "@/context/AuthContext";
 import { userService } from "@/services/userService";
 import { eventService } from "@/services/eventService";
 import { getDynamicEventStatus } from "@/utils/eventUtils";
+import { formatEventId } from "@/utils/formatId";
 
 interface EventRow {
   id: string;
+  eventId: string;
   name: string;
   organizer: string;
   createdOn: string;
@@ -94,8 +96,10 @@ export default function OrganizerDetailsPage() {
         const start = ev.schedule?.start || ev.startDate;
         const end = ev.schedule?.end || ev.endDate;
         const rawStatus = String(ev.status || "").toUpperCase();
+        const rawId = ev._id || ev.id;
         return {
-          id: ev._id || ev.id,
+          id: rawId,
+          eventId: formatEventId(ev.eventId || rawId),
           name: ev.title || ev.eventName || "Untitled Event",
           organizer: ev.organizerId?.fullName || foundOrg.name,
           createdOn: ev.createdAt ? new Date(ev.createdAt).toLocaleDateString() : "—",
@@ -133,6 +137,7 @@ export default function OrganizerDetailsPage() {
   const filteredEvents = events.filter(
     (ev) =>
       ev.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ev.eventId.toLowerCase().includes(searchQuery.toLowerCase()) ||
       ev.id.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -356,7 +361,7 @@ export default function OrganizerDetailsPage() {
                   )}
                   {filteredEvents.map((ev) => (
                     <tr key={ev.id} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="py-4 px-4 font-medium text-gray-900">{ev.id}</td>
+                      <td className="py-4 px-4 font-medium text-gray-900">{ev.eventId}</td>
                       <td className="py-4 px-4 font-medium text-gray-900">{ev.name}</td>
                       <td className="py-4 px-4 text-gray-600">{ev.organizer}</td>
                       <td className="py-4 px-4 text-gray-600">{ev.createdOn}</td>

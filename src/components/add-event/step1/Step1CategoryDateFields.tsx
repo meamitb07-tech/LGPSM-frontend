@@ -8,8 +8,13 @@ interface Step1CategoryDateFieldsProps {
   setCategory: (val: string) => void;
   subcategory: string;
   setSubcategory: (val: string) => void;
+  categoryOptions: { value: string; label: string }[];
+  subcategoryOptions: { value: string; label: string }[];
+  categoriesError?: string | null;
   startDate: string;
   endDate: string;
+  startError?: string;
+  endError?: string;
   onOpenDatePicker: (field: "start" | "end" | "rsvp") => void;
 }
 
@@ -18,47 +23,41 @@ export default function Step1CategoryDateFields({
   setCategory,
   subcategory,
   setSubcategory,
+  categoryOptions,
+  subcategoryOptions,
+  categoriesError,
   startDate,
   endDate,
+  startError,
+  endError,
   onOpenDatePicker,
 }: Step1CategoryDateFieldsProps) {
-  const categoryOptions = [
-    { value: "Personal", label: "Personal" },
-    { value: "Corporate", label: "Corporate" },
-    { value: "Wedding", label: "Wedding" },
-  ];
-
-  const subcategoryOptions = [
-    { value: "Birthday", label: "Birthday" },
-    { value: "Anniversary", label: "Anniversary" },
-    { value: "Party", label: "Party" },
-  ];
-
   return (
     <>
       {/* Category & Subcategory Row with CustomDropdown */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block font-semibold text-gray-900 mb-1">
-            Event Category<span className="text-[#FF5B22] ml-0.5">*</span>
+            Event Category
           </label>
           <CustomDropdown
             value={category}
             onChange={setCategory}
             options={categoryOptions}
-            placeholder="- Category -"
+            placeholder={categoryOptions.length ? "- Category -" : "No categories yet (General)"}
           />
+          {categoriesError && <p className="mt-1 text-[11px] font-medium text-rose-600">{categoriesError}</p>}
         </div>
 
         <div>
           <label className="block font-semibold text-gray-900 mb-1">
-            Event Subcategory<span className="text-[#FF5B22] ml-0.5">*</span>
+            Event Subcategory
           </label>
           <CustomDropdown
             value={subcategory}
             onChange={setSubcategory}
             options={subcategoryOptions}
-            placeholder="- Subcategory -"
+            placeholder={subcategoryOptions.length ? "- Subcategory -" : "None for this category"}
           />
         </div>
       </div>
@@ -81,6 +80,7 @@ export default function Step1CategoryDateFields({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </button>
+          {startError && <p className="mt-1 text-[11px] font-medium text-rose-600">{startError}</p>}
         </div>
 
         <div>
@@ -99,6 +99,7 @@ export default function Step1CategoryDateFields({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </button>
+          {endError && <p className="mt-1 text-[11px] font-medium text-rose-600">{endError}</p>}
         </div>
       </div>
     </>

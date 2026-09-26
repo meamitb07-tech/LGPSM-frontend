@@ -8,7 +8,7 @@ import { sessionService } from "@/services/sessionService";
 import CustomDropdown from "@/components/common/CustomDropdown";
 import { useAlert } from "@/context/AlertContext";
 import { formatPhoneNumber, isValidEmail, isValidMobile } from "@/utils/eventUtils";
-import * as XLSX from "xlsx";
+import { downloadInviteeTemplate } from "@/utils/inviteeTemplate";
 
 interface AddInviteesModalProps {
   isOpen: boolean;
@@ -160,17 +160,7 @@ export default function AddInviteesModal({
   };
 
   const handleDownloadSample = () => {
-    try {
-      const sampleData = [
-        { Name: "Subrata Saha", Email: "subrata@example.com", Mobile: "+919876543210", "Company Name": "LGPSM Corp", "Dietary Preference": "Veg" },
-        { Name: "Anita Roy", Email: "anita@example.com", Mobile: "+919876543211", "Company Name": "Tech Solutions", "Dietary Preference": "Non-Veg" },
-      ];
-      const worksheet = XLSX.utils.json_to_sheet(sampleData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Invitees");
-      XLSX.writeFile(workbook, "LGPSM_Invitee_Sample_Template.xlsx");
-    } catch (err) {
-      console.error("Error generating sample excel:", err);
+    if (!downloadInviteeTemplate()) {
       showAlert("Could not download sample template.", "error");
     }
   };

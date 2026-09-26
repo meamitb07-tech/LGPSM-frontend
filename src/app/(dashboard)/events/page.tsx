@@ -6,6 +6,8 @@ import { useAuth } from "@/context/AuthContext";
 import { eventService, EventData } from "@/services/eventService";
 
 import { getDynamicEventStatus } from "@/utils/eventUtils";
+import { formatEventId } from "@/utils/formatId";
+import { formatDateTime } from "@/utils/dateTime";
 import UserNavDropdown from "@/components/common/UserNavDropdown";
 
 interface EventRow {
@@ -43,7 +45,7 @@ export default function EventListingPage() {
       if (res && res.success && Array.isArray(rawList)) {
         const apiMapped: EventRow[] = rawList.map((item: any, index: number) => {
           const id = item._id || item.id || String(index + 1);
-          const eventId = `#${String(id).slice(-4).toUpperCase()}`;
+          const eventId = formatEventId(id);
 
           const rawStatus = (item.status || "Upcoming").toString().toUpperCase();
           let mappedStatus: "Upcoming" | "Completed" | "Ongoing" | "Invitation Sent" = "Upcoming";
@@ -71,8 +73,8 @@ export default function EventListingPage() {
               || "—",
             createdOn: item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "Recently",
             category: item.category || item.categoryId?.name || "—",
-            startDate: startVal ? new Date(startVal).toLocaleString() : "TBD",
-            endDate: endVal ? new Date(endVal).toLocaleString() : "TBD",
+            startDate: formatDateTime(startVal, "TBD"),
+            endDate: formatDateTime(endVal, "TBD"),
             status: dynamicStatus as EventRow["status"],
           };
         });

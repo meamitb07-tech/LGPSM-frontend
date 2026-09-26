@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import UserNavDropdown from "@/components/common/UserNavDropdown";
+import { useAuth } from "@/context/AuthContext";
 import AddNewTemplateCard from "@/components/settings/AddNewTemplateCard";
 import TemplateFilterGrid from "@/components/settings/TemplateFilterGrid";
 import AddCategoryModal from "@/components/settings/modals/AddCategoryModal";
@@ -19,6 +20,9 @@ import {
 const TEMPLATE_PLACEHOLDER_IMAGE = "/images/branding/Invitation_Card_Sample.png";
 
 export default function TemplateSettingsPage() {
+  const { user } = useAuth();
+  // Template and category management is admin-only on the backend; others get a read-only view
+  const canManage = user?.role === "ADMIN";
   const [categories, setCategories] = useState<TemplateCategory[]>([]);
   const [subcategories, setSubcategories] = useState<TemplateSubcategory[]>([]);
   const [rawCategories, setRawCategories] = useState<Category[]>([]);
@@ -172,6 +176,12 @@ export default function TemplateSettingsPage() {
           </div>
         )}
         {loading && <p className="text-xs text-gray-500 font-medium">Loading templates...</p>}
+        {!canManage && (
+          <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-md text-xs font-medium">
+            Templates and categories are managed by the platform administrator. You can browse them here and pick one when creating an event.
+          </div>
+        )}
+        {canManage && (
         <AddNewTemplateCard
           categories={categories}
           subcategories={subcategories}
@@ -179,12 +189,13 @@ export default function TemplateSettingsPage() {
           onOpenAddSubcategory={() => setIsAddSubOpen(true)}
           onAddTemplate={handleAddTemplate}
         />
+        )}
 
         <TemplateFilterGrid
           templates={templates}
           categories={categories}
           subcategories={subcategories}
-          onEditTemplate={(tpl) => setEditingTemplate(tpl)}
+          onEditTemplate={canManage ? (tpl) => setEditingTemplate(tpl) : undefined}
         />
       </div>
 

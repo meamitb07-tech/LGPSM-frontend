@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter, usePathname } from "next/navigation";
-import { notificationService } from "@/services/notificationService";
+import { notificationService, onNotificationsChanged } from "@/services/notificationService";
 
 interface SidebarFooterProps {
   activeItem?: string;
@@ -16,17 +16,22 @@ export default function SidebarFooter({ activeItem }: SidebarFooterProps) {
   const { logout, isAuthenticated } = useAuth();
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
-  // Unread count comes from the backend (meta.unreadCount); refreshed on navigation
+  // Unread count comes from the backend (meta.unreadCount); refreshed on navigation and whenever notifications change
   useEffect(() => {
     if (!isAuthenticated) return;
     let cancelled = false;
-    notificationService.getUserNotifications(true, 1, 1).then((res) => {
-      if (cancelled) return;
-      const count = (res as { meta?: { unreadCount?: number } }).meta?.unreadCount;
-      setUnreadCount(res.success && typeof count === "number" ? count : 0);
-    });
+    const refresh = () => {
+      notificationService.getUserNotifications(true, 1, 1).then((res) => {
+        if (cancelled) return;
+        const count = res.meta?.unreadCount;
+        setUnreadCount(res.success && typeof count === "number" ? count : 0);
+      });
+    };
+    refresh();
+    const unsubscribe = onNotificationsChanged(refresh);
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [isAuthenticated, pathname]);
 

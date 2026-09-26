@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef } from "react";
 import jsQR from "jsqr";
 import { sessionService } from "@/services/sessionService";
 import { eventService } from "@/services/eventService";
+import { assignmentService } from "@/services/assignmentService";
+import { useAuth } from "@/context/AuthContext";
 import { checkInService, CheckInResponseData } from "@/services/checkInService";
 
 interface CheckInModalProps {
@@ -21,10 +23,12 @@ export default function CheckInModal({
   eventName: propEventName,
   onCheckInSuccess,
 }: CheckInModalProps) {
+  const { user } = useAuth();
   const [activeMode, setActiveMode] = useState<"QR" | "MANUAL">("QR");
 
-  // Event selection fallback
-  const [events, setEvents] = useState<any[]>([]);
+  // Event selection when the modal is opened without a specific event
+  const [events, setEvents] = useState<{ id: string; title: string }[]>([]);
+  const [eventsError, setEventsError] = useState<string | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string>(propEventId || "");
   const [selectedEventName, setSelectedEventName] = useState<string>(propEventName || "");
   const [loadingEvents, setLoadingEvents] = useState<boolean>(false);
@@ -54,32 +58,47 @@ export default function CheckInModal({
     }
   }, [propEventId, propEventName]);
 
-  // Load events list if no eventId is provided
+  // Load the events this user may check guests into (system users: their assignments)
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || propEventId) return;
+    let cancelled = false;
 
     async function loadEventsList() {
-      if (propEventId) return;
       setLoadingEvents(true);
-      try {
+      setEventsError(null);
+      let list: { id: string; title: string }[] = [];
+      let error: string | null = null;
+      if (user?.role === "SYSTEM_USER") {
+        const res = await assignmentService.getMyAssignments();
+        if (res.success && Array.isArray(res.data)) {
+          list = res.data
+            .map((a) => (typeof a.eventId === "object" && a.eventId ? { id: a.eventId._id, title: a.eventId.title || "Event" } : null))
+            .filter((e): e is { id: string; title: string } => !!e);
+        } else error = res.message || "Failed to load your assigned events.";
+      } else {
         const res = await eventService.getEvents();
-        if (res?.success && Array.isArray(res.data)) {
-          setEvents(res.data);
-          if (res.data.length > 0 && !selectedEventId) {
-            const firstEv = res.data[0];
-            setSelectedEventId(firstEv._id || firstEv.id);
-            setSelectedEventName(firstEv.title || firstEv.name || "Selected Event");
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load events for checkin modal:", err);
-      } finally {
-        setLoadingEvents(false);
+        if (res.success && Array.isArray(res.data)) {
+          list = (res.data as { _id?: string; id?: string; title?: string; status?: string }[])
+            .filter((e) => String(e.status || "").toUpperCase() !== "CANCELLED")
+            .map((e) => ({ id: String(e._id || e.id), title: e.title || "Event" }));
+        } else error = res.message || "Failed to load events.";
       }
+      if (cancelled) return;
+      setEvents(list);
+      setEventsError(error);
+      // Only preselect when there is exactly one choice; otherwise the user picks explicitly
+      if (list.length === 1) {
+        setSelectedEventId(list[0].id);
+        setSelectedEventName(list[0].title);
+      }
+      setLoadingEvents(false);
     }
 
     loadEventsList();
-  }, [isOpen, propEventId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, propEventId, user?.role]);
 
   // Fetch real sessions when selectedEventId changes
   useEffect(() => {
@@ -92,11 +111,8 @@ export default function CheckInModal({
         const res = await sessionService.getSessions(selectedEventId);
         if (res?.success && Array.isArray(res.data)) {
           setSessions(res.data);
-          if (res.data.length > 0) {
-            setSelectedSessionId(res.data[0]._id || res.data[0].id || "");
-          } else {
-            setSelectedSessionId("");
-          }
+          // Default to event-wide check-in; a session is chosen explicitly
+          setSelectedSessionId("");
         } else {
           setSessions([]);
           setSelectedSessionId("");
@@ -123,6 +139,7 @@ export default function CheckInModal({
   }, [isOpen]);
 
   // Image QR parser handler (e.g. uploaded invitation-qr.png)
+  // Only decodes the QR and populates the input field — the user must then click "Verify & Check In"
   const handleQRFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -146,9 +163,8 @@ export default function CheckInModal({
         const code = jsQR(imageData.data, imageData.width, imageData.height);
 
         if (code && code.data) {
+          // Populate the QR input — the user clicks "Verify & Check In" to proceed
           setQrInput(code.data);
-          // Auto trigger scan validation
-          executeScanCheckIn(code.data);
         } else {
           setErrorMessage("Could not decode a valid QR pattern from this image file. Please upload a clear QR pass image or paste the invitation link.");
         }
@@ -159,6 +175,10 @@ export default function CheckInModal({
   };
 
   const executeScanCheckIn = async (qrTokenStr: string) => {
+    if (!selectedEventId) {
+      setErrorMessage("Select the event you are checking guests into.");
+      return;
+    }
     if (!qrTokenStr.trim()) {
       setErrorMessage("Please upload a QR pass image or paste the invitation link.");
       return;
@@ -171,7 +191,7 @@ export default function CheckInModal({
     try {
       const res = await checkInService.scanCheckIn({
         qrCode: qrTokenStr.trim(),
-        eventId: selectedEventId || undefined,
+        eventId: selectedEventId,
         sessionId: selectedSessionId || undefined,
       });
 
@@ -195,6 +215,10 @@ export default function CheckInModal({
     e.preventDefault();
     setErrorMessage(null);
     setSuccessData(null);
+    if (!selectedEventId) {
+      setErrorMessage("Select the event you are checking guests into.");
+      return;
+    }
     setSubmitting(true);
 
     try {
@@ -315,6 +339,41 @@ export default function CheckInModal({
             </button>
           </div>
 
+          {/* Event Selection (only when the modal was not opened for a specific event) */}
+          {!propEventId && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-gray-700" htmlFor="checkin-event">Event</label>
+              {loadingEvents ? (
+                <div className="h-9 w-full bg-gray-100 rounded-md animate-pulse" />
+              ) : eventsError ? (
+                <p className="text-xs text-rose-600 break-words">{eventsError}</p>
+              ) : events.length === 0 ? (
+                <p className="text-xs text-gray-500">
+                  {user?.role === "SYSTEM_USER" ? "You have no event assignments yet." : "No events available for check-in."}
+                </p>
+              ) : (
+                <select
+                  id="checkin-event"
+                  value={selectedEventId}
+                  onChange={(e) => {
+                    const chosen = events.find((ev) => ev.id === e.target.value);
+                    setSelectedEventId(e.target.value);
+                    setSelectedEventName(chosen?.title || "");
+                    setSelectedSessionId("");
+                    setErrorMessage(null);
+                    setSuccessData(null);
+                  }}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-xs text-gray-800 focus:outline-none focus:border-[#FF5B22] transition-colors"
+                >
+                  <option value="">-- Select event --</option>
+                  {events.map((ev) => (
+                    <option key={ev.id} value={ev.id}>{ev.title}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+
           {/* Session Selection Dropdown */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-gray-700 flex items-center justify-between">
@@ -332,7 +391,7 @@ export default function CheckInModal({
                 <option value="">-- Event-Wide Check-In (No Specific Session) --</option>
                 {sessions.map((s) => (
                   <option key={s._id || s.id} value={s._id || s.id}>
-                    {s.name || s.title} {s.accessControl ? `(${s.accessControl})` : ""}
+                    {s.name || s.title} {s.accessControl === "ONLY_ONCE" ? "(Only once)" : ""}
                   </option>
                 ))}
               </select>

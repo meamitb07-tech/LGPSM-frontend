@@ -1,38 +1,8 @@
 import { apiClient, ApiResponse } from "./apiClient";
-import { parseCustomDateTime } from "./sessionService";
 
 // ─────────────────────────────────────────────
 // Event API Types
 // ─────────────────────────────────────────────
-
-export interface EventPayload {
-  title: string;
-  description?: string;
-  startDate?: string;
-  endDate?: string;
-  rsvpDeadline?: string;
-  location?: string;
-  venueDetails?: string;
-  maxAttendees?: number;
-  isPublic?: boolean;
-  templateId?: string;
-  sessions?: SessionPayload[];
-  settings?: EventSettings;
-}
-
-export interface SessionPayload {
-  name: string;
-  startTime?: string;
-  endTime?: string;
-  maxAttendees?: number;
-  accessType?: "single" | "multiple";
-}
-
-export interface EventSettings {
-  allowWalkIns?: boolean;
-  requireApproval?: boolean;
-  sendReminders?: boolean;
-}
 
 export interface EventData {
   id: string;
@@ -53,8 +23,6 @@ export interface EventData {
   status?: "draft" | "published" | "cancelled" | "completed" | "DRAFT" | "PUBLISHED" | "CANCELLED" | "COMPLETED";
   operationalDataCleared?: boolean;
   organizerId?: string;
-  sessions?: SessionPayload[];
-  settings?: EventSettings;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -83,99 +51,46 @@ export interface PresignData {
 }
 
 // ─────────────────────────────────────────────
-// Event Service
-function formatEventPayload(payload: any) {
-  const title = payload.title || payload.eventName || "Untitled Event";
-  
-  const startInput = payload.startDate || payload.schedule?.start;
-  const startDateObj = startInput ? parseCustomDateTime(startInput) : new Date();
-  const startISO = startDateObj.toISOString();
+// Request shapes (mirror backend validators in event.validator.ts; dates are ISO strings)
+// ─────────────────────────────────────────────
 
-  const endInput = payload.endDate || payload.schedule?.end;
-  let endDateObj = endInput ? parseCustomDateTime(endInput) : new Date(startDateObj.getTime() + 8 * 3600 * 1000);
-
-  if (isNaN(endDateObj.getTime()) || endDateObj <= startDateObj) {
-    endDateObj = new Date(startDateObj.getTime() + 8 * 3600 * 1000);
-  }
-  const endISO = endDateObj.toISOString();
-
-  const rawAddress = typeof payload.location === "string"
-    ? payload.location
-    : (payload.location?.address || payload.venue || "");
-  const address = typeof rawAddress === "string" ? rawAddress.trim() : "";
-
-  return {
-    title,
-    description: payload.description || title,
-    format: "PHYSICAL",
-    schedule: {
-      start: startISO,
-      end: endISO,
-    },
-    // Only send a venue the user actually entered
-    ...(address ? { location: { address } } : {}),
+interface EventRequestBase {
+  title: string;
+  description?: string;
+  categoryId?: string;
+  subcategoryId?: string;
+  contactNumber?: string;
+  location?: { address?: string };
+  schedule: { start: string; end: string };
+  rsvp?: {
+    enabled: boolean;
+    acceptanceLastDate?: string;
+    allowAllInvited: boolean;
+    allowNotResponded: boolean;
+    allowDeclined: boolean;
   };
+  attendeeSettings?: { thresholdLimit?: number };
+  dietaryPreference?: { enabled: boolean; title?: string; options?: unknown[] };
+  templateId?: string;
 }
 
-// Strict parse for user-entered dates: ISO strings or the picker format "DD/MM/YY hh.mm AM".
-// Returns null instead of silently substituting "now".
-function parseUserDate(value: unknown): Date | null {
-  if (!value) return null;
-  if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (/^\d{1,2}\/\d{1,2}\/\d{2,4}/.test(trimmed)) {
-    const parsed = parseCustomDateTime(trimmed);
-    return isNaN(parsed.getTime()) ? null : parsed;
-  }
-  const direct = new Date(trimmed);
-  return isNaN(direct.getTime()) ? null : direct;
+export interface CreateEventRequest extends EventRequestBase {
+  format?: "PHYSICAL" | "VIRTUAL";
 }
 
-function formatUpdatePayload(payload: any) {
-  const body: any = {};
-  if (payload.title || payload.eventName) body.title = payload.title || payload.eventName;
-  if (payload.description) body.description = payload.description;
-
-  const start = parseUserDate(payload.startDate || payload.schedule?.start);
-  const end = parseUserDate(payload.endDate || payload.schedule?.end);
-  if (start && end && end > start) {
-    body.schedule = {
-      start: start.toISOString(),
-      end: end.toISOString(),
-    };
-  }
-
-  // An edited venue (string) takes precedence over the stored location object
-  const address = typeof payload.venue === "string"
-    ? payload.venue.trim()
-    : typeof payload.location === "string"
-      ? payload.location.trim()
-      : payload.location?.address;
-  if (address) {
-    body.location = { address };
-  }
-
-  if (payload.status) {
-    const st = payload.status.toUpperCase();
-    if (st === "DRAFT" || st === "PUBLISHED" || st === "CANCELLED" || st === "COMPLETED") {
-      body.status = st;
-    }
-  }
-
-  return body;
-}
+export type UpdateEventRequest = Partial<EventRequestBase> & {
+  status?: "DRAFT" | "PUBLISHED" | "CANCELLED" | "COMPLETED";
+};
 
 export const eventService = {
   /**
    * Create a new event
    * POST /api/v1/events
    */
-  async createEvent(payload: EventPayload): Promise<ApiResponse<EventData>> {
-    const formatted = formatEventPayload(payload);
+  async createEvent(payload: CreateEventRequest): Promise<ApiResponse<EventData>> {
     return apiClient<EventData>("/api/v1/events", {
       method: "POST",
-      body: JSON.stringify(formatted),
+      body: JSON.stringify(payload),
     }, true);
   },
 
@@ -214,11 +129,10 @@ export const eventService = {
    * Update an existing event
    * PATCH /api/v1/events/:eventId
    */
-  async updateEvent(eventId: string, payload: Partial<EventPayload>): Promise<ApiResponse<EventData>> {
-    const formatted = formatUpdatePayload(payload);
+  async updateEvent(eventId: string, payload: UpdateEventRequest): Promise<ApiResponse<EventData>> {
     return apiClient<EventData>(`/api/v1/events/${eventId}`, {
       method: "PATCH",
-      body: JSON.stringify(formatted),
+      body: JSON.stringify(payload),
     }, true);
   },
 

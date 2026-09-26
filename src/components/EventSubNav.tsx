@@ -33,7 +33,9 @@ export default function EventSubNav({
 
   // Fallback counts live in a ref so parent re-renders do not trigger another round of requests
   const fallbackCounts = useRef({ propSessionsCount, propInviteesCount, propAssignmentsCount });
-  fallbackCounts.current = { propSessionsCount, propInviteesCount, propAssignmentsCount };
+  useEffect(() => {
+    fallbackCounts.current = { propSessionsCount, propInviteesCount, propAssignmentsCount };
+  }, [propSessionsCount, propInviteesCount, propAssignmentsCount]);
 
   const fetchUnifiedCounts = useCallback(async () => {
     const { propSessionsCount, propInviteesCount, propAssignmentsCount } = fallbackCounts.current;

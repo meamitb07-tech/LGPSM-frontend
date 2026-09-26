@@ -36,7 +36,7 @@ export default function SidebarSettingsGroup({
       label: "Price Rate Settings",
       href: "/settings/price-rate",
       activeKeys: ["price-rate-settings"],
-      roles: ["ADMIN", "ORGANIZER"],
+      roles: ["ADMIN"],
     },
     {
       label: "Notification Settings",

@@ -23,9 +23,17 @@ const caveat = Caveat({
 });
 
 export const metadata: Metadata = {
-  title: "LGPSM - Digital Invitations for Today's Events",
+  title: {
+    default: "LGPSM",
+    template: "%s | LGPSM",
+  },
   description:
-    "Design, customize, and share stunning QR-based invitations for events and celebrations all in one simple platform.",
+    "LGPSM - Design, customize, and share stunning QR-based invitations for events and celebrations all in one simple platform.",
+  icons: {
+    icon: "/images/branding/Logo.png",
+    shortcut: "/images/branding/Logo.png",
+    apple: "/images/branding/Logo.png",
+  },
 };
 
 export default function RootLayout({

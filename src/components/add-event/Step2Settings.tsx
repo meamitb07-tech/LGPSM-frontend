@@ -1,33 +1,26 @@
 "use client";
 
 import React, { useState } from "react";
-
-interface PreferenceCategory {
-  id: string;
-  title: string;
-  options: string[];
-}
+import { DraftErrors, EventDraft, PreferenceCategory, newClientKey } from "./eventDraft";
 
 interface Step2SettingsProps {
+  draft: EventDraft;
+  onChange: (patch: Partial<EventDraft>) => void;
+  errors: DraftErrors;
   onNext: () => void;
   onBack: () => void;
 }
 
-export default function Step2Settings({ onNext, onBack }: Step2SettingsProps) {
-  const [maxAttendees, setMaxAttendees] = useState("");
-  const [acceptAll, setAcceptAll] = useState(true);
-  const [allowNotResponded, setAllowNotResponded] = useState(false);
-  const [allowDeclined, setAllowDeclined] = useState(false);
-  const [askFoodPreference, setAskFoodPreference] = useState(true);
-
-  // Dynamic Preference Categories State
-  const [categories, setCategories] = useState<PreferenceCategory[]>([
-    {
-      id: "cat-1",
-      title: "Dietary Preference",
-      options: ["Vegetarian"],
-    },
-  ]);
+// Controlled step: values live in the wizard draft owned by the page
+export default function Step2Settings({ draft, onChange, errors, onNext, onBack }: Step2SettingsProps) {
+  const categories = draft.preferenceCategories;
+  const setCategories = (updater: (prev: PreferenceCategory[]) => PreferenceCategory[]) =>
+    onChange({ preferenceCategories: updater(categories) });
+  const maxAttendees = draft.thresholdLimit;
+  const acceptAll = draft.allowAllInvited;
+  const allowNotResponded = draft.allowNotResponded;
+  const allowDeclined = draft.allowDeclined;
+  const askFoodPreference = draft.dietaryEnabled;
 
   const [savedCategories, setSavedCategories] = useState<Record<string, boolean>>({});
 
@@ -74,7 +67,7 @@ export default function Step2Settings({ onNext, onBack }: Step2SettingsProps) {
 
   // Add New Preference Category ("+ Add Another")
   const handleAddCategory = () => {
-    const newId = `cat-${Date.now()}`;
+    const newId = newClientKey("pref");
     setCategories((prev) => [
       ...prev,
       {
@@ -113,19 +106,22 @@ export default function Step2Settings({ onNext, onBack }: Step2SettingsProps) {
         <input
           type="number"
           value={maxAttendees}
-          onChange={(e) => setMaxAttendees(e.target.value)}
+          onChange={(e) => onChange({ thresholdLimit: e.target.value })}
           placeholder="Enter Max Attendee count"
+          min={1}
           className="w-full max-w-lg px-3.5 py-2.5 bg-[#F9FAFB] border border-gray-200 rounded-md text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-[#FF5B22] focus:border-[#FF5B22] font-medium transition-all"
         />
+        {errors.thresholdLimit && <p className="text-[11px] font-medium text-rose-600">{errors.thresholdLimit}</p>}
       </div>
 
       {/* Checkbox Options List */}
       <div className="space-y-3">
         {/* Accept all invited attendees */}
         <div className="p-3.5 border border-gray-200 rounded-md bg-white flex items-center justify-between shadow-2xs">
-          <label className="flex items-center gap-3 cursor-pointer select-none">
+          <label className="flex items-center gap-3 cursor-pointer select-none" onClick={() => onChange({ allowAllInvited: !acceptAll })}>
             <div
-              onClick={() => setAcceptAll(!acceptAll)}
+              role="checkbox"
+              aria-checked={acceptAll}
               className={`w-4 h-4 rounded flex items-center justify-center transition-all shrink-0 ${
                 acceptAll ? "bg-[#10B981] text-white border-[#10B981]" : "bg-white border border-gray-300 text-transparent"
               }`}
@@ -143,11 +139,12 @@ export default function Step2Settings({ onNext, onBack }: Step2SettingsProps) {
           </span>
         </div>
 
-        {/* Allow not-resonded invitees */}
+        {/* Allow not-responded invitees */}
         <div className="p-3.5 border border-gray-200 rounded-md bg-white flex items-center justify-between shadow-2xs">
-          <label className="flex items-center gap-3 cursor-pointer select-none">
+          <label className="flex items-center gap-3 cursor-pointer select-none" onClick={() => onChange({ allowNotResponded: !allowNotResponded })}>
             <div
-              onClick={() => setAllowNotResponded(!allowNotResponded)}
+              role="checkbox"
+              aria-checked={allowNotResponded}
               className={`w-4 h-4 rounded flex items-center justify-center transition-all shrink-0 ${
                 allowNotResponded ? "bg-[#10B981] text-white border-[#10B981]" : "bg-white border border-gray-300 text-transparent"
               }`}
@@ -157,7 +154,7 @@ export default function Step2Settings({ onNext, onBack }: Step2SettingsProps) {
               </svg>
             </div>
             <span className="font-medium text-gray-400 text-xs">
-              Allow not-resonded invitees
+              Allow not-responded invitees
             </span>
           </label>
           <span className="w-4 h-4 text-gray-400 border border-gray-300 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0">
@@ -167,9 +164,10 @@ export default function Step2Settings({ onNext, onBack }: Step2SettingsProps) {
 
         {/* Allow RSVP declined invitees */}
         <div className="p-3.5 border border-gray-200 rounded-md bg-white flex items-center justify-between shadow-2xs">
-          <label className="flex items-center gap-3 cursor-pointer select-none">
+          <label className="flex items-center gap-3 cursor-pointer select-none" onClick={() => onChange({ allowDeclined: !allowDeclined })}>
             <div
-              onClick={() => setAllowDeclined(!allowDeclined)}
+              role="checkbox"
+              aria-checked={allowDeclined}
               className={`w-4 h-4 rounded flex items-center justify-center transition-all shrink-0 ${
                 allowDeclined ? "bg-[#10B981] text-white border-[#10B981]" : "bg-white border border-gray-300 text-transparent"
               }`}
@@ -190,9 +188,10 @@ export default function Step2Settings({ onNext, onBack }: Step2SettingsProps) {
         {/* Ask for food preference */}
         <div className="p-4 border border-gray-200 rounded-md bg-white space-y-5 shadow-2xs">
           <div className="flex items-center justify-between">
-            <label className="flex items-center gap-3 cursor-pointer select-none">
+            <label className="flex items-center gap-3 cursor-pointer select-none" onClick={() => onChange({ dietaryEnabled: !askFoodPreference })}>
               <div
-                onClick={() => setAskFoodPreference(!askFoodPreference)}
+                role="checkbox"
+                aria-checked={askFoodPreference}
                 className={`w-4 h-4 rounded flex items-center justify-center transition-all shrink-0 ${
                   askFoodPreference ? "bg-[#10B981] text-white border-[#10B981]" : "bg-white border border-gray-300 text-transparent"
                 }`}

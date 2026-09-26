@@ -6,7 +6,8 @@ import { useAuth } from "@/context/AuthContext";
 import { userService } from "@/services/userService";
 import UserNavDropdown from "@/components/common/UserNavDropdown";
 import { eventService } from "@/services/eventService";
-import { sessionService } from "@/services/sessionService";
+import { useEventSessions } from "@/hooks/useEventSessions";
+import SessionScopePicker from "@/components/common/SessionScopePicker";
 import { assignmentService, AssignmentData } from "@/services/assignmentService";
 import { getAssignedCountText, SystemUserRow } from "@/app/(dashboard)/user-management/assign/page";
 
@@ -30,8 +31,9 @@ export default function AllUsersPage() {
   // Form selections
   const [eventsList, setEventsList] = useState<{ id: string; name: string }[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
-  const [eventSessionsList, setEventSessionsList] = useState<{ id: string; name: string }[]>([]);
-  const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
+  // null = all sessions of the selected event
+  const [sessionScope, setSessionScope] = useState<string[] | null>(null);
+  const { sessions: eventSessionsList, loading: loadingSessions, error: sessionsError } = useEventSessions(selectedEventId);
   const [submittingAssign, setSubmittingAssign] = useState(false);
   const [errorFeedback, setErrorFeedback] = useState<string | null>(null);
 
@@ -119,34 +121,6 @@ export default function AllUsersPage() {
   useEffect(() => {
     fetchUsersAndAssignments();
   }, []);
-
-  // Fetch sessions for selected event in modal
-  useEffect(() => {
-    if (!selectedEventId) return;
-
-    async function loadSessions() {
-      try {
-        const res = await sessionService.getSessions(selectedEventId);
-        if (res.success && Array.isArray(res.data)) {
-          const mapped = res.data.map((s: any) => ({
-            id: s._id || s.id,
-            name: s.name || s.title || "Session",
-          }));
-          setEventSessionsList(mapped);
-          if (mapped.length > 0) {
-            setSelectedSessionIds([mapped[0].id]);
-          } else {
-            setSelectedSessionIds([]);
-          }
-        }
-      } catch (err) {
-        setEventSessionsList([]);
-        setSelectedSessionIds([]);
-      }
-    }
-
-    loadSessions();
-  }, [selectedEventId]);
 
   const toggleExpand = (id: string) => {
     if (expandedUserIds.includes(id)) {
@@ -251,6 +225,10 @@ export default function AllUsersPage() {
   const handleAssignSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedIds.length === 0 || !selectedEventId) return;
+    if (sessionScope !== null && sessionScope.length === 0) {
+      setErrorFeedback("Select at least one session, or choose \"All sessions\".");
+      return;
+    }
 
     try {
       setSubmittingAssign(true);
@@ -258,10 +236,10 @@ export default function AllUsersPage() {
 
       const errorMsgs: string[] = [];
       for (const userId of selectedIds) {
-        const res = await assignmentService.createAssignment(selectedEventId, {
-          userId,
-          sessionIds: selectedSessionIds,
-        });
+        const existing = users
+          .find((u) => u.id === userId)
+          ?.assignments.find((a) => a.eventId === selectedEventId);
+        const res = await assignmentService.saveAssignment(selectedEventId, userId, sessionScope ?? [], existing?.assignmentId);
 
         if (!res.success) {
           errorMsgs.push(res.message || "Assignment failed.");
@@ -690,7 +668,10 @@ export default function AllUsersPage() {
                 </label>
                 <select
                   value={selectedEventId}
-                  onChange={(e) => setSelectedEventId(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedEventId(e.target.value);
+                    setSessionScope(null);
+                  }}
                   className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-md text-xs text-gray-800 focus:outline-none focus:border-[#FF5B22] cursor-pointer"
                 >
                   {eventsList.map((evt) => (
@@ -701,34 +682,17 @@ export default function AllUsersPage() {
                 </select>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-800">
-                  Sessions<span className="text-[#FF5B22]">*</span>
-                </label>
-                {eventSessionsList.length > 0 ? (
-                  <div className="space-y-2 border border-gray-200 rounded-md p-3 max-h-40 overflow-y-auto">
-                    {eventSessionsList.map((s) => (
-                      <label key={s.id} className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={selectedSessionIds.includes(s.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedSessionIds([...selectedSessionIds, s.id]);
-                            } else {
-                              setSelectedSessionIds(selectedSessionIds.filter((id) => id !== s.id));
-                            }
-                          }}
-                          className="rounded border-gray-300 text-[#FF5B22] focus:ring-[#FF5B22]"
-                        />
-                        <span>{s.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-400 italic">No sessions found for this event.</p>
-                )}
-              </div>
+              <SessionScopePicker
+                sessions={eventSessionsList}
+                loading={loadingSessions}
+                error={sessionsError}
+                value={sessionScope}
+                onChange={setSessionScope}
+              />
+
+              {errorFeedback && (
+                <p role="alert" className="text-xs font-medium text-rose-600 break-words">{errorFeedback}</p>
+              )}
 
               <div className="pt-2 pb-6 flex items-center justify-end gap-3">
                 <button
